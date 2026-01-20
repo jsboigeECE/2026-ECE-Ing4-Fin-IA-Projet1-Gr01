@@ -1,0 +1,5 @@
+{
+    "python.analysis.extraPaths": [
+        "./groupe-15-graph-coloring/src"
+    ]
+}
