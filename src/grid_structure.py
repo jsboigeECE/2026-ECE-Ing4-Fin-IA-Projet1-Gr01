@@ -32,47 +32,41 @@ class GridStructure:
     def _parse_slots(self):
         """Détecte les mots horizontaux et verticaux."""
         slot_id = 0
+        self.slots = []
 
         # 1. Analyse Horizontale
         for r in range(self.rows):
-            c = 0
-            while c < self.cols:
-                if self.grid[r][c] == '.': # Début potentiel d'un mot
-                    start_col = c
-                    length = 0
-                    cells = []
-                    while c < self.cols and self.grid[r][c] == '.':
-                        cells.append((r, c))
-                        length += 1
-                        c += 1
-                    
-                    # On garde seulement les mots de longueur >= 2
-                    if length >= 2:
-                        slot = WordSlot(slot_id, 'H', r, start_col, length, cells)
-                        self.slots.append(slot)
-                        slot_id += 1
+            current_cells = []
+            for c in range(self.cols):
+                if self.grid[r][c] == '.':
+                    current_cells.append((r, c))
                 else:
-                    c += 1
+                    # Case noire : fin de mot
+                    if len(current_cells) >= 1:
+                        self.slots.append(WordSlot(slot_id, 'H', current_cells[0][0], current_cells[0][1], len(current_cells), current_cells))
+                        slot_id += 1
+                    current_cells = []
+            # Fin de ligne
+            if len(current_cells) >= 1:
+                self.slots.append(WordSlot(slot_id, 'H', current_cells[0][0], current_cells[0][1], len(current_cells), current_cells))
+                slot_id += 1
 
         # 2. Analyse Verticale
         for c in range(self.cols):
-            r = 0
-            while r < self.rows:
+            current_cells = []
+            for r in range(self.rows):
                 if self.grid[r][c] == '.':
-                    start_row = r
-                    length = 0
-                    cells = []
-                    while r < self.rows and self.grid[r][c] == '.':
-                        cells.append((r, c))
-                        length += 1
-                        r += 1
-                    
-                    if length >= 2:
-                        slot = WordSlot(slot_id, 'V', start_row, c, length, cells)
-                        self.slots.append(slot)
-                        slot_id += 1
+                    current_cells.append((r, c))
                 else:
-                    r += 1
+                    # Case noire : fin de mot
+                    if len(current_cells) >= 1:
+                        self.slots.append(WordSlot(slot_id, 'V', current_cells[0][0], current_cells[0][1], len(current_cells), current_cells))
+                        slot_id += 1
+                    current_cells = []
+            # Fin de colonne
+            if len(current_cells) >= 1:
+                self.slots.append(WordSlot(slot_id, 'V', current_cells[0][0], current_cells[0][1], len(current_cells), current_cells))
+                slot_id += 1
 
     def _find_intersections(self):
         """Trouve où les mots se croisent."""
@@ -115,9 +109,9 @@ class GridStructure:
             print(f"Le mot ID {inter['id_h']} (idx {inter['index_h']}) croise le mot ID {inter['id_v']} (idx {inter['index_v']})")
 
 if __name__ == "__main__":
-    # --- GÉNÉRATION D'UNE GRILLE ALÉATOIRE 12x12 ---
-    ROWS, COLS = 10, 10
-    NB_NOIRES = 15
+    # --- GÉNÉRATION D'UNE GRILLE ALÉATOIRE 5x5 ---
+    ROWS, COLS = 6, 6
+    NB_NOIRES = 9
 
     # 1. Création grille vide
     # On utilise une liste de listes pour pouvoir modifier facilement
@@ -125,12 +119,24 @@ if __name__ == "__main__":
 
     # 2. Ajout des cases noires aléatoires
     count = 0
-    while count < NB_NOIRES:
+    attempts = 0
+    while count < NB_NOIRES and attempts < 200:
+        attempts += 1
         r = random.randint(0, ROWS - 1)
         c = random.randint(0, COLS - 1)
-        if temp_grid[r][c] == '.':
-            temp_grid[r][c] = '#'
-            count += 1
+        if temp_grid[r][c] == '#': continue
+        
+        # Pas de contact
+        if any(0 <= r+dr < ROWS and 0 <= c+dc < COLS and temp_grid[r+dr][c+dc] == '#' for dr, dc in [(-1,0), (1,0), (0,-1), (0,1)]):
+            continue
+        
+        # Max 3 sur bords
+        if r in [0, ROWS-1] or c in [0, COLS-1]:
+            if sum(1 for i in range(ROWS) for j in range(COLS) if temp_grid[i][j] == '#' and (i in [0, ROWS-1] or j in [0, COLS-1])) >= 3:
+                continue
+
+        temp_grid[r][c] = '#'
+        count += 1
 
     # Conversion en format attendu par GridStructure (liste de strings)
     grille_test = ["".join(row) for row in temp_grid]

@@ -42,8 +42,8 @@ class DictionaryProcessor:
                 count_total += 1
                 cleaned = self._clean_word(raw_word)
                 
-                # On ignore les mots trop courts (< 2 lettres)
-                if len(cleaned) < 2: continue
+                # On ignore les mots vides
+                if len(cleaned) < 1: continue
                 
                 length = len(cleaned)
                 if length not in self.words_by_length:

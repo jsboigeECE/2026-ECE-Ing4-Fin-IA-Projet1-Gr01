@@ -2,24 +2,39 @@ import os
 import random
 import webbrowser
 from grid_structure import GridStructure
+from solveur import CrosswordSolver, PATH_DICO
 
 # --- CONFIGURATION ---
-ROWS = 10
-COLS = 10
-NB_NOIRES = 15
+ROWS = 12
+COLS = 12
 NOM_FICHIER_HTML = "grille_mots_croises.html"
 
 def generer_grille_donnees():
     """Génère la matrice de la grille (liste de listes)."""
-    grid = [['.' for _ in range(COLS)] for _ in range(ROWS)]
-    count = 0
-    while count < NB_NOIRES:
-        r = random.randint(0, ROWS - 1)
-        c = random.randint(0, COLS - 1)
-        if grid[r][c] == '.':
-            grid[r][c] = '#'
-            count += 1
-    return grid
+    # Configuration demandée : 24 cases noires fixes
+    nb_noires = 24
+    
+    while True:
+        grid = [['.' for _ in range(COLS)] for _ in range(ROWS)]
+        count = 0
+        
+        # Placement aléatoire des 24 cubes
+        while count < nb_noires:
+            r = random.randint(0, ROWS - 1)
+            c = random.randint(0, COLS - 1)
+            if grid[r][c] == '.':
+                grid[r][c] = '#'
+                count += 1
+        
+        # Vérification minimale : on évite juste les grilles avec trop de mots d'une lettre (invalides)
+        # On ne se soucie plus du nombre de croisements, OR-Tools gère !
+        grid_str = ["".join(row) for row in grid]
+        analyseur = GridStructure(grid_str)
+        nb_mots_1_lettre = sum(1 for s in analyseur.slots if s.length == 1)
+        
+        if nb_mots_1_lettre <= 1:
+            print(f"Grille générée : {nb_noires} cases noires (12x12).")
+            return grid
 
 def creer_html(grid_data, analyseur):
     """Construit le code HTML pour afficher la grille et les infos."""
@@ -54,7 +69,7 @@ def creer_html(grid_data, analyseur):
         </style>
     </head>
     <body>
-        <h1>Générateur de Grille (10x10)</h1>
+        <h1>Générateur de Grille (""" + f"{ROWS}x{COLS}" + """)</h1>
         <div class="container">
             <div>
                 <table>
@@ -116,3 +131,8 @@ if __name__ == "__main__":
     
     print(f"Fichier HTML généré : {chemin_html}")
     webbrowser.open(chemin_html)
+
+    # --- RÉSOLUTION AUTOMATIQUE ---
+    print("\n--- Tentative de résolution de la grille générée ---")
+    solver = CrosswordSolver(grille_str, PATH_DICO)
+    solver.solve()

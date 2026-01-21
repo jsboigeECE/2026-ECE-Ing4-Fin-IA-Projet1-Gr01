@@ -3,9 +3,9 @@ import random
 from grid_structure import GridStructure  # On récupère la logique de l'autre fichier
 
 # --- CONFIGURATION ---
-ROWS = 10
-COLS = 10
-NB_NOIRES = 15
+ROWS = 12
+COLS = 12
+NB_NOIRES = 24
 CELL_SIZE = 40  # Taille d'une case en pixels
 MARGIN = 30     # Marge pour écrire les A, B, C et 1, 2, 3
 
@@ -34,18 +34,39 @@ class CrosswordApp:
 
     def generate_grid_data(self):
         """Génère la structure de données (logique identique à la version console)."""
-        # 1. Grille vide
-        grid = [['.' for _ in range(COLS)] for _ in range(ROWS)]
-        
-        # 2. Placement aléatoire des cases noires
-        count = 0
-        while count < NB_NOIRES:
-            r = random.randint(0, ROWS - 1)
-            c = random.randint(0, COLS - 1)
-            if grid[r][c] == '.':
+        while True:
+            # 1. Grille vide
+            grid = [['.' for _ in range(COLS)] for _ in range(ROWS)]
+            
+            # 2. Placement aléatoire des cases noires
+            count = 0
+            attempts = 0
+            while count < NB_NOIRES and attempts < 200:
+                attempts += 1
+                r = random.randint(0, ROWS - 1)
+                c = random.randint(0, COLS - 1)
+                if grid[r][c] == '#': continue
+
+                # Pas de contact
+                if any(0 <= r+dr < ROWS and 0 <= c+dc < COLS and grid[r+dr][c+dc] == '#' 
+                       for dr, dc in [(-1,0), (1,0), (0,-1), (0,1)]):
+                    continue
+                
+                # Max 3 sur bords
+                if r in [0, ROWS-1] or c in [0, COLS-1]:
+                    if sum(1 for i in range(ROWS) for j in range(COLS) if grid[i][j] == '#' and (i in [0, ROWS-1] or j in [0, COLS-1])) >= 3:
+                        continue
+
                 grid[r][c] = '#'
                 count += 1
-        return grid
+
+            # Vérification de la contrainte : Max 1 mot de 1 lettre
+            grid_strings = ["".join(row) for row in grid]
+            analyseur = GridStructure(grid_strings)
+            nb_mots_1_lettre = sum(1 for s in analyseur.slots if s.length == 1)
+
+            if count >= 5 and nb_mots_1_lettre <= 1:
+                return grid
 
     def regenerate(self):
         """Crée une nouvelle grille et met à jour l'affichage."""
