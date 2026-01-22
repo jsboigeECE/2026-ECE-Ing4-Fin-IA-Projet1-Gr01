@@ -1,17 +1,29 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Dict, Hashable, List, Tuple, Optional
+from typing import Dict, Hashable, Optional, Tuple
+
 import networkx as nx
 
 Node = Hashable
-Edge = Tuple[Node, Node]
 
 
-@dataclass
+@dataclass(frozen=True)
 class Instance:
     name: str
     graph: nx.Graph
     pos: Optional[Dict[Node, Tuple[float, float]]] = None
+
+
+def _norm_name(name: str) -> str:
+    # tolérant aux petites erreurs: map.like / map-like / map like -> map_like
+    return (
+        name.strip()
+        .lower()
+        .replace(".", "_")
+        .replace("-", "_")
+        .replace(" ", "_")
+    )
 
 
 def triangle() -> Instance:
@@ -22,29 +34,32 @@ def triangle() -> Instance:
 
 
 def cycle(n: int = 8) -> Instance:
+    n = max(3, int(n))
     G = nx.cycle_graph(n)
     pos = nx.circular_layout(G)
     return Instance(f"cycle_{n}", G, pos)
 
 
 def grid(w: int = 4, h: int = 4) -> Instance:
-    # Noeuds = tuples (x,y)
+    w = max(2, int(w))
+    h = max(2, int(h))
     G = nx.grid_2d_graph(w, h)
-    pos = {(x, y): (x, -y) for (x, y) in G.nodes()}
+    pos = {(x, y): (float(x), float(-y)) for (x, y) in G.nodes()}
     return Instance(f"grid_{w}x{h}", G, pos)
 
 
 def random_erdos(n: int = 25, p: float = 0.2, seed: int = 1) -> Instance:
+    n = max(1, int(n))
+    p = float(p)
+    p = 0.0 if p < 0.0 else 1.0 if p > 1.0 else p
+    seed = int(seed)
     G = nx.erdos_renyi_graph(n=n, p=p, seed=seed)
     pos = nx.spring_layout(G, seed=seed)
     return Instance(f"erdos_n{n}_p{p}_s{seed}", G, pos)
 
 
 def map_like() -> Instance:
-    """
-    Petite 'carte' fictive (régions A..J) avec une structure planar-ish.
-    Très bien pour montrer 'map coloring' sans dépendances externes.
-    """
+    """Petite 'carte' fictive (régions A..J) pour démo de map coloring."""
     regions = list("ABCDEFGHIJ")
     adj = [
         ("A", "B"), ("A", "C"),
@@ -61,7 +76,6 @@ def map_like() -> Instance:
     G.add_nodes_from(regions)
     G.add_edges_from(adj)
 
-    # positions fixes pour un rendu "carte"
     pos = {
         "A": (0, 2), "B": (1, 2), "C": (0.5, 1.5),
         "D": (1.5, 1.5), "E": (1, 1),
@@ -72,16 +86,25 @@ def map_like() -> Instance:
     return Instance("map_like", G, pos)
 
 
-def load_instance(name: str, n: int, p: float, seed: int, w: int, h: int) -> Instance:
-    name = name.lower()
-    if name == "triangle":
+def load_instance(
+    name: str,
+    n: int = 25,
+    p: float = 0.2,
+    seed: int = 1,
+    w: int = 4,
+    h: int = 4,
+) -> Instance:
+    key = _norm_name(name)
+
+    if key == "triangle":
         return triangle()
-    if name == "cycle":
-        return cycle(n=max(3, n))
-    if name == "grid":
-        return grid(w=max(2, w), h=max(2, h))
-    if name in ("random", "erdos", "erdos_renyi"):
-        return random_erdos(n=max(1, n), p=p, seed=seed)
-    if name in ("map", "map_like"):
+    if key == "cycle":
+        return cycle(n=n)
+    if key == "grid":
+        return grid(w=w, h=h)
+    if key in ("random", "erdos", "erdos_renyi"):
+        return random_erdos(n=n, p=p, seed=seed)
+    if key in ("map", "map_like"):
         return map_like()
-    raise ValueError(f"Instance inconnue: {name}")
+
+    raise ValueError(f"Instance inconnue: {name} (triangle/cycle/grid/erdos/map_like)")
