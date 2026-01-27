@@ -42,24 +42,56 @@ def fetch_data(table_name, params=None, cache_file=None, force_reload=False):
         params["select"] = "*"
     
     print(f"Fetching data from {url}...")
-    try:
-        response = requests.get(url, headers=headers, params=params)
-        response.raise_for_status()
-        data = response.json()
+    
+    all_data = []
+    # Supabase (PostgREST) often limits to 1000 by default unless configured otherwise.
+    # We ask for a large chunk, but handle whatever we get.
+    batch_size = 10000
+    offset = 0
+    
+    while True:
+        # Range header inclusive: 0-9
+        headers["Range"] = f"{offset}-{offset + batch_size - 1}"
         
-        df = pd.DataFrame(data)
-        
-        if cache_file:
-            print(f"Saving to {cache_file}...")
-            if cache_file.endswith('.parquet'):
-                df.to_parquet(DATA_DIR / cache_file)
-            else:
-                df.to_csv(DATA_DIR / cache_file, index=False)
-        
-        return df
-    except Exception as e:
-        print(f"Error fetching {table_name}: {e}")
+        try:
+            response = requests.get(url, headers=headers, params=params)
+            response.raise_for_status()
+            batch = response.json()
+            
+            if not batch:
+                break
+                
+            all_data.extend(batch)
+            count = len(batch)
+            print(f"  Fetched {count} rows (Total: {len(all_data)})...")
+            
+            # Prepare next offset
+            offset += count
+            
+            # If we got fewer than (some small number), we are probably done.
+            # But safer to just loop until empty.
+            # However, if server limit is 1000 and we got 1000, we might have more.
+            # If we got < 1000, we are definitely done.
+            if count < 1000: 
+                break
+                
+        except Exception as e:
+            print(f"Error fetching {table_name} at offset {offset}: {e}")
+            break
+            
+    if not all_data:
         return None
+
+    df = pd.DataFrame(all_data)
+    
+    if cache_file:
+        print(f"Saving to {cache_file}...")
+        if cache_file.endswith('.parquet'):
+            df.to_parquet(DATA_DIR / cache_file)
+        else:
+            df.to_csv(DATA_DIR / cache_file, index=False)
+    
+    return df
 
 
 # Validated Table Names
@@ -87,7 +119,7 @@ def load_prices(tickers=None, start_date=None):
     # Default order
     params["order"] = "trade_date.asc"
     
-    df = fetch_data(TABLE_PRICES, params=params, cache_file="prices.parquet")
+    df = fetch_data(TABLE_PRICES, params=params)
     
     if df is not None and not df.empty:
         # Standardize columns
@@ -99,7 +131,19 @@ def load_prices(tickers=None, start_date=None):
             "low_price": "low",
             "close_price": "close"
         })
+        
+        # Enforce numeric types
+        numeric_cols = ["open", "high", "low", "close", "adj_close", "volume"]
+        for col in numeric_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+                
         df["date"] = pd.to_datetime(df["date"])
+        
+        # Save manually here since we modified it
+        print("Saving cleaned prices to prices.parquet...")
+        df.to_parquet(DATA_DIR / "prices.parquet")
+        
     return df
 
 def load_macro():
