@@ -100,12 +100,28 @@ def run_xgboost_analysis():
     y = labeled_df['target']
     X['date'] = labeled_df['date'] # For split
     
+    # Extract weights if available
+    weights = None
+    if 'sample_weight' in labeled_df.columns:
+        print("⚖️ Using Sample Weights (Regime Separation)")
+        weights = labeled_df['sample_weight']
+    
     print(f"Dataset Size: {len(X)} rows")
+    
+    # Split
+    # We need to split weights manually or assume index alignment
+    # temporal_split returns dataframes, let's use the indices
     
     X_train, X_val, X_test = pp.temporal_split(X)
     y_train = y.loc[X_train.index]
     y_val = y.loc[X_val.index]
     y_test = y.loc[X_test.index]
+    
+    w_train = weights.loc[X_train.index] if weights is not None else None
+    
+    # Debug weights
+    if w_train is not None:
+        print(f"Weight Stats (Train): Min={w_train.min():.4f}, Max={w_train.max():.4f}, Mean={w_train.mean():.4f}")
     
     X_train = X_train.drop(columns=['date'])
     X_val = X_val.drop(columns=['date'])
@@ -113,7 +129,7 @@ def run_xgboost_analysis():
     
     print("🤖 Training XGBoost...")
     model = md.XGBoostModel()
-    model.train(X_train, y_train, X_val, y_val)
+    model.train(X_train, y_train, X_val, y_val, sample_weight=w_train)
     
     print("📊 Evaluating...")
     metrics = model.evaluate(X_test, y_test)

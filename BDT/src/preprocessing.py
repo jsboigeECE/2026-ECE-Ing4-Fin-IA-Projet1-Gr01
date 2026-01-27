@@ -89,20 +89,48 @@ def merge_data(prices: pd.DataFrame, technicals: pd.DataFrame, macro: pd.DataFra
         print("Merging Macro data...")
         macro['date'] = pd.to_datetime(macro['date'])
         # We assume 'name' or 'series_id' identifies the feature
-        # Let's use 'name' if available and unique per date, else 'series_id'
         pivot_col = 'name' if 'name' in macro.columns else 'series_id'
         
         # Remove duplicates
         macro = macro.drop_duplicates(subset=['date', pivot_col])
         
         macro_wide = macro.pivot(index='date', columns=pivot_col, values='value')
-        # Handle weekends/holidays in macro by forward filling
-        macro_wide = macro_wide.sort_index().ffill() # Forward fill macro data
         
+        # Rename common columns for easier access
+        rename_map = {
+            '10-Year Treasury Yield': 'treasury_10y',
+            '2-Year Treasury Yield': 'treasury_2y',
+            'CBOE Volatility Index (VIX)': 'vix',
+            'Federal Funds Rate': 'fed_rate',
+            'Unemployment Rate (US)': 'unemployment_rate',
+            'Consumer Price Index (US)': 'cpi',
+            'Real GDP (US)': 'gdp'
+        }
+        # Only rename columns that exist
+        cols_to_rename = {k: v for k, v in rename_map.items() if k in macro_wide.columns}
+        macro_wide = macro_wide.rename(columns=cols_to_rename)
+        
+        # Handle weekends/holidays in macro by forward filling
+        macro_wide = macro_wide.sort_index().ffill() 
+        
+        # Calculate Term Spread (Yield Curve)
+        if 'treasury_10y' in macro_wide.columns and 'treasury_2y' in macro_wide.columns:
+            macro_wide['term_spread'] = macro_wide['treasury_10y'] - macro_wide['treasury_2y']
+            
         # Reset index to make 'date' a column again for merge
         macro_wide = macro_wide.reset_index()
         
         df = pd.merge(df, macro_wide, on='date', how='left')
+        
+    # 5. Calculate Sample Weights (Exponential Decay)
+    # Give less weight to old data.
+    # Weight = decay_rate ^ (years_ago)
+    # Decay 0.94 per year => 1970 is ~50 years ago => 0.94^50 = 0.045 (~5% weight)
+    print("Calculating Sample Weights...")
+    max_date = df['date'].max()
+    # Convert timedelta to years (approx)
+    years_ago = (max_date - df['date']).dt.days / 365.25
+    df['sample_weight'] = 0.94 ** years_ago
         
     return df
 

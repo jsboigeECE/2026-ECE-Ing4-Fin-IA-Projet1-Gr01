@@ -24,7 +24,7 @@ class XGBoostModel:
         }
         self.model = None
 
-    def train(self, X_train, y_train, X_val=None, y_val=None):
+    def train(self, X_train, y_train, X_val=None, y_val=None, sample_weight=None):
         """
         Train the model with early stopping.
         """
@@ -39,6 +39,7 @@ class XGBoostModel:
             
         self.model.fit(
             X_train, y_train,
+            sample_weight=sample_weight,
             eval_set=eval_set,
             verbose=50
         )
