@@ -1,14 +1,11 @@
 from __future__ import annotations
-
 import argparse
 import json
 import os
 import time
 from pathlib import Path
-from typing import Dict, Hashable, Optional, Tuple
-
+from typing import Dict, Hashable, Optional, Callable, Tuple, Any
 import networkx as nx
-
 from instances import load_instance
 from heuristics import greedy_coloring, dsatur_coloring
 from solve_coloring import solve_k_coloring, solve_min_coloring
@@ -22,7 +19,6 @@ except Exception:
 
 Node = Hashable
 
-
 # ------------------- IO helpers -------------------
 def ensure_parent(path: Optional[str]) -> Optional[Path]:
     if not path:
@@ -32,7 +28,6 @@ def ensure_parent(path: Optional[str]) -> Optional[Path]:
         p.parent.mkdir(parents=True, exist_ok=True)
     return p
 
-
 def save_json(path: str, payload: dict) -> None:
     p = ensure_parent(path)
     if p is None:
@@ -40,57 +35,45 @@ def save_json(path: str, payload: dict) -> None:
     with open(p, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
 
-
 def make_before_path(save_fig: Optional[str]) -> Optional[str]:
     if not save_fig:
         return None
     root, ext = os.path.splitext(save_fig)
     return f"{root}_before{ext or '.png'}"
 
-
 # ------------------- Metrics -------------------
-def is_valid_coloring(G: nx.Graph, coloring: Dict[Node, int]) -> bool:
-    return all(coloring.get(u) != coloring.get(v) for u, v in G.edges())
-
+def is_valid_coloring(G: nx.Graph, coloring: Optional[Dict[Node, int]]) -> bool:
+    if coloring is None:
+        return False
+    if len(coloring) != G.number_of_nodes():
+        return False
+    return all(coloring[u] != coloring[v] for u, v in G.edges())
 
 def colors_used(coloring: Dict[Node, int]) -> int:
     return len(set(coloring.values())) if coloring else 0
 
-
 # ------------------- Bounds (optimization) -------------------
 def lower_bound_clique(G: nx.Graph) -> int:
-    """
-    Lower bound via clique number.
-    - For our project sizes, networkx clique_number is ok.
-    - If it fails for any reason, fallback to 1.
-    """
     try:
-        # exact clique number (can be heavy on very large graphs)
         return max(1, int(nx.graph_clique_number(G)))
     except Exception:
         return 1
 
-
 def upper_bound_dsatur(G: nx.Graph) -> int:
-    col = dsatur_coloring(G)
-    return max(1, colors_used(col))
-
+    return max(1, colors_used(dsatur_coloring(G)))
 
 # ------------------- Interactive helpers -------------------
 def ask_str(prompt: str, default: str) -> str:
     s = input(f"{prompt} [{default}] : ").strip()
     return s if s else default
 
-
 def ask_int(prompt: str, default: int) -> int:
     s = input(f"{prompt} [{default}] : ").strip()
     return int(s) if s else default
 
-
 def ask_float(prompt: str, default: float) -> float:
     s = input(f"{prompt} [{default}] : ").strip()
     return float(s) if s else default
-
 
 def ask_bool(prompt: str, default: bool) -> bool:
     d = "o" if default else "n"
@@ -99,6 +82,9 @@ def ask_bool(prompt: str, default: bool) -> bool:
         return default
     return s in ("o", "oui", "y", "yes")
 
+def ask_optional_path(prompt: str) -> Optional[str]:
+    s = input(f"{prompt} (Entrée = rien) : ").strip()
+    return s or None
 
 def interactive_config() -> dict:
     print("\n=== Coloration de graphe / carte (mode interactif) ===")
@@ -116,28 +102,24 @@ def interactive_config() -> dict:
     print("  - cp_min    : OR-Tools CP-SAT (cherche le minimum k) + bornes (LB/UB)")
     print("  - greedy    : heuristique gloutonne")
     print("  - dsatur    : heuristique DSATUR")
-    print("  - compare   : compare greedy/dsatur/cp_min (bonus 1 + 6)")
-    print("  - benchmark : benchmark auto -> CSV (bonus 5)")
+    print("  - compare   : compare greedy/dsatur/cp_min")
+    print("  - benchmark : benchmark auto -> CSV")
     method = ask_str("Choisis une méthode", "cp_min").lower()
 
     timeout = ask_float("timeout (secondes) [cp_* ou benchmark]", 3.0)
 
-    k = None
-    if method == "cp_k":
-        k = ask_int("k (nb max de couleurs)", 4)
+    k = ask_int("k (nb max de couleurs)", 4) if method == "cp_k" else None
 
     show = ask_bool("Afficher les graphes (avant puis après) ?", False)
-    save_fig = ask_str("Chemin image (ex: outputs/map.png) (Entrée = rien)", "")
-    save_fig = save_fig if save_fig else None
-    save_js = ask_str("Chemin JSON (ex: outputs/map.json) (Entrée = rien)", "")
-    save_js = save_js if save_js else None
+    save_fig = ask_optional_path("Chemin image (ex: outputs/map.png)")
+    save_js  = ask_optional_path("Chemin JSON (ex: outputs/map.json)")
+
 
     return {
         "instance": instance, "n": n, "p": p, "seed": seed, "w": w, "h": h,
         "method": method, "k": k, "timeout": timeout,
         "show": show, "save_fig": save_fig, "save_json": save_js
     }
-
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Graph/Map Coloring (interactive by default).")
@@ -158,17 +140,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--save-json", type=str, default=None)
     return p
 
-
 # ------------------- Runners -------------------
-def draw_before_after(
-    G: nx.Graph,
-    pos,
-    inst_name: str,
-    title_after: str,
-    coloring: Optional[Dict[Node, int]],
-    show: bool,
-    save_fig: Optional[str],
-):
+def draw_before_after(G, pos, inst_name, title_after, coloring, show, save_fig):
     if not (show or save_fig):
         return
 
@@ -184,35 +157,37 @@ def draw_before_after(
         draw_coloring(G, coloring, pos=pos, title=title_after, save_path=save_fig, show=show)
 
 
-def run_method(
-    G: nx.Graph,
-    pos,
-    inst_name: str,
-    method: str,
-    timeout: float,
-    k: Optional[int],
-    show: bool,
-    save_fig: Optional[str],
-    save_json_path: Optional[str],
-):
-    nodes = list(G.nodes())
-    edges = list(G.edges())
+def timed(fn: Callable[[], Any]) -> Tuple[Any, float]:
+    t0 = time.perf_counter()
+    out = fn()
+    return out, time.perf_counter() - t0
 
-    coloring: Optional[Dict[Node, int]] = None
+
+def print_result(G: nx.Graph, inst_name: str, method: str, used: int, valid: bool, info: dict, k: Optional[int]):
+    print("\n--- Résultat ---")
+    print(f"Instance: {inst_name} | nodes={G.number_of_nodes()} edges={G.number_of_edges()}")
+    print(f"Method: {method}")
+    if method == "cp_k":
+        print(f"k={k} | status={info.get('status')} | colors_used={used} | valid={valid}")
+    elif method == "cp_min":
+        print(f"LB={info.get('lb_clique')} UB={info.get('ub_dsatur')} | k*={info.get('k_found')} | colors_used={used} | valid={valid}")
+    else:
+        print(f"colors_used={used} | valid={valid}")
+
+
+def run_method(G, pos, inst_name, method, timeout, k, show, save_fig, save_json_path):
+    coloring = None
     info: dict = {}
-    used = 0
-    valid = False
+
+    if method in ("cp_k", "cp_min"):
+        nodes, edges = list(G.nodes()), list(G.edges())
 
     if method == "greedy":
-        t0 = time.perf_counter()
-        coloring = greedy_coloring(G)
-        dt = time.perf_counter() - t0
+        coloring, dt = timed(lambda: greedy_coloring(G))
         info = {"status": "OK", "time_s": dt}
 
     elif method == "dsatur":
-        t0 = time.perf_counter()
-        coloring = dsatur_coloring(G)
-        dt = time.perf_counter() - t0
+        coloring, dt = timed(lambda: dsatur_coloring(G))
         info = {"status": "OK", "time_s": dt}
 
     elif method == "cp_k":
@@ -222,15 +197,10 @@ def run_method(
         info = {"status": si.status, "time_s": si.time_s, "conflicts": si.conflicts, "branches": si.branches}
 
     elif method == "cp_min":
-        # 🔥 OPTIMISATION: bornes LB/UB
         lb = lower_bound_clique(G)
-        ub = upper_bound_dsatur(G)
-        best_k, coloring, log = solve_min_coloring(
-            nodes, edges,
-            k_min=lb,
-            k_max=ub,                 # stop at DSATUR upper bound
-            timeout_per_k_s=timeout,
-        )
+        ub = max(lb, upper_bound_dsatur(G))
+
+        best_k, coloring, log = solve_min_coloring(nodes, edges, k_min=lb, k_max=ub, timeout_per_k_s=timeout)
         info = {
             "lb_clique": lb,
             "ub_dsatur": ub,
@@ -241,19 +211,10 @@ def run_method(
     else:
         raise ValueError(f"Méthode inconnue: {method}")
 
-    if coloring is not None:
-        used = colors_used(coloring)
-        valid = is_valid_coloring(G, coloring)
+    valid = is_valid_coloring(G, coloring)
+    used = colors_used(coloring) if coloring is not None else 0
 
-    print("\n--- Résultat ---")
-    print(f"Instance: {inst_name} | nodes={G.number_of_nodes()} edges={G.number_of_edges()}")
-    print(f"Method: {method}")
-    if method == "cp_k":
-        print(f"k={k} | status={info.get('status')} | colors_used={used} | valid={valid}")
-    elif method == "cp_min":
-        print(f"LB={info.get('lb_clique')} UB={info.get('ub_dsatur')} | k*={info.get('k_found')} | colors_used={used} | valid={valid}")
-    else:
-        print(f"colors_used={used} | valid={valid}")
+    print_result(G, inst_name, method, used, valid, info, k)
 
     title_after = f"{inst_name} | {method} | colors={used} | valid={valid}"
     draw_before_after(G, pos, inst_name, title_after, coloring, show, save_fig)
@@ -272,38 +233,21 @@ def run_method(
         print(f"JSON sauvegardé -> {save_json_path}")
 
 
-def run_compare(
-    inst,
-    timeout: float,
-    show: bool,
-    save_fig: Optional[str],
-    save_json_path: Optional[str],
-):
+def run_compare(inst, timeout, show, save_fig, save_json_path):
     methods = ["greedy", "dsatur", "cp_min"]
-    base_fig = save_fig
-    base_json = save_json_path
-
     for m in methods:
         fig_path = None
         js_path = None
-        if base_fig:
-            root, ext = os.path.splitext(base_fig)
+        if save_fig:
+            root, ext = os.path.splitext(save_fig)
             fig_path = f"{root}_{m}{ext or '.png'}"
-        if base_json:
-            root, ext = os.path.splitext(base_json)
+        if save_json_path:
+            root, ext = os.path.splitext(save_json_path)
             js_path = f"{root}_{m}{ext or '.json'}"
 
-        # Afficher seulement pour le dernier (évite 6 fenêtres)
         show_now = show and (m == methods[-1])
-
         print(f"\n=== RUN {m} ===")
-        run_method(
-            inst.graph, inst.pos, inst.name,
-            method=m, timeout=timeout, k=None,
-            show=show_now,
-            save_fig=fig_path,
-            save_json_path=js_path,
-        )
+        run_method(inst.graph, inst.pos, inst.name, m, timeout, None, show_now, fig_path, js_path)
 
 
 def run_bench(timeout: float):
@@ -328,7 +272,6 @@ def main() -> None:
         save_js = cfg["save_json"]
         k = cfg["k"]
 
-        # ✅ BENCHMARK: ne dépend plus d'une instance (anti-crash)
         if method == "benchmark":
             run_bench(timeout)
             return
@@ -356,7 +299,7 @@ def main() -> None:
     if method == "compare":
         run_compare(inst, timeout=timeout, show=show, save_fig=save_fig, save_json_path=save_js)
     else:
-        run_method(inst.graph, inst.pos, inst.name, method=method, timeout=timeout, k=k, show=show, save_fig=save_fig, save_json_path=save_js)
+        run_method(inst.graph, inst.pos, inst.name, method, timeout, k, show, save_fig, save_js)
 
 
 if __name__ == "__main__":
