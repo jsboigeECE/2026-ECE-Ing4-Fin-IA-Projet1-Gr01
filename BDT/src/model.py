@@ -9,12 +9,18 @@ class XGBoostModel:
         self.params = params if params else {
             'objective': 'binary:logistic',
             'eval_metric': 'auc',
-            'max_depth': 4,
-            'learning_rate': 0.05,
-            'n_estimators': 500,
+            'max_depth': 2,            # Reduced from 4 to 2 (drastically limits complexity)
+            'learning_rate': 0.01,     # Reduced from 0.05 to 0.01 (slower learning)
+            'n_estimators': 1000,      # Increased estimators (compensated by early stopping)
             'n_jobs': -1,
             'random_state': 42,
-            'early_stopping_rounds': 50
+            'early_stopping_rounds': 50,
+            # Regularization
+            'subsample': 0.7,          # Use only 70% of data per tree
+            'colsample_bytree': 0.7,   # Use only 70% of features per tree
+            'gamma': 1.0,              # Minimum loss reduction required for split
+            'reg_alpha': 0.5,          # L1 Regularization
+            'reg_lambda': 1.0          # L2 Regularization
         }
         self.model = None
 

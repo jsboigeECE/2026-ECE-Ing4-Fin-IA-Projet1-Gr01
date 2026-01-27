@@ -74,17 +74,20 @@ def run_xgboost_analysis():
     prices = dl.load_prices()
     macro = dl.load_macro()
     technicals = dl.load_technicals()
+    fundamentals = dl.load_fundamentals()
     
     if prices is None or prices.empty:
         print("❌ Failed to load data.")
         return
 
     print(f"Loaded Prices: {prices.shape}")
+    if fundamentals is not None:
+        print(f"Loaded Fundamentals: {fundamentals.shape}")
 
     # Process
     print("PREPROCESSING...")
     prices = pp.clean_data(prices)
-    full_df = pp.merge_data(prices, technicals, macro)
+    full_df = pp.merge_data(prices, technicals, macro, fundamentals)
     labeled_df = pp.create_target(full_df, horizon=20)
     
     # Filter features

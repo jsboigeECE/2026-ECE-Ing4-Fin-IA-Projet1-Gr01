@@ -15,7 +15,33 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
         df = df.sort_values('date')
     return df
 
-def merge_data(prices, technicals, macro):
+def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Level 1 Feature Engineering: Create relative and advanced metrics.
+    """
+    df = df.copy()
+    
+    # Ensure return_1d exists
+    if 'return_1d' not in df.columns and 'close' in df.columns:
+        df['return_1d'] = df.groupby('ticker')['close'].pct_change()
+    
+    # 1. Volatility Measures (Rolling)
+    # 20d Rolling Volatility of returns
+    if 'return_1d' in df.columns:
+        df['volatility_20d'] = df.groupby('ticker')['return_1d'].transform(lambda x: x.rolling(20).std())
+    
+    # 2. Distance to Moving Averages
+    if 'close' in df.columns:
+        df['ma_50'] = df.groupby('ticker')['close'].transform(lambda x: x.rolling(50).mean())
+        df['dist_ma_50'] = (df['close'] - df['ma_50']) / df['ma_50']
+    
+    # 3. RSI Lags / interaction
+    if 'rsi_14' in df.columns:
+        df['rsi_dist_50'] = df['rsi_14'] - 50  # Centered RSI
+        
+    return df
+
+def merge_data(prices: pd.DataFrame, technicals: pd.DataFrame, macro: pd.DataFrame = None, fundamentals: pd.DataFrame = None) -> pd.DataFrame:
     """
     Merge Prices, Technicals (on ticker, date) and Macro (on date).
     """
@@ -29,13 +55,39 @@ def merge_data(prices, technicals, macro):
         technicals['date'] = pd.to_datetime(technicals['date'])
         # Drop duplicates in technicals just in case
         technicals = technicals.drop_duplicates(subset=['ticker', 'date'])
-        df = pd.merge(df, technicals, on=['ticker', 'date'], how='left', suffixes=('', '_tech'))
     
-    # Merge Macro
-    # Macro data might be long format (series_id, date, value) -> Pivot to wide
+    # 1. Merge Prices & Technicals
+    # Ensure dates are datetime for merging
+    prices['date'] = pd.to_datetime(prices['date'])
+    technicals['date'] = pd.to_datetime(technicals['date'])
+    df = pd.merge(prices, technicals, on=['date', 'ticker'], how='left')
+    
+    # 2. Engineer Advanced Features (Level 1)
+    df = engineer_features(df)
+    
+    # 3. Merge Fundamentals (Level 2) - backward fill (latest available fundamental)
+    if fundamentals is not None and not fundamentals.empty:
+        print("Merging Fundamentals (asof)...")
+        # Ensure dates are datetime for merging
+        fundamentals['date'] = pd.to_datetime(fundamentals['date'])
+        
+        df = df.sort_values('date') # merge_asof requires sorted 'on' key
+        fundamentals = fundamentals.sort_values('date') # merge_asof requires sorted 'on' key
+        
+        df = pd.merge_asof(
+            df, 
+            fundamentals, 
+            on='date', 
+            by='ticker', 
+            direction='backward',
+            suffixes=('', '_fund')
+        )
+    
+    # 4. Merge Macro (Broadcast to all tickers)
+    # Pivot macro to wide format (date, indicator -> value columns)
     if macro is not None and not macro.empty:
+        print("Merging Macro data...")
         macro['date'] = pd.to_datetime(macro['date'])
-        # Pivot macro: index=date, columns=name/series_id, values=value
         # We assume 'name' or 'series_id' identifies the feature
         # Let's use 'name' if available and unique per date, else 'series_id'
         pivot_col = 'name' if 'name' in macro.columns else 'series_id'
@@ -44,12 +96,12 @@ def merge_data(prices, technicals, macro):
         macro = macro.drop_duplicates(subset=['date', pivot_col])
         
         macro_wide = macro.pivot(index='date', columns=pivot_col, values='value')
-        macro_wide = macro_wide.sort_index().fillna(method='ffill') # Forward fill macro data
+        # Handle weekends/holidays in macro by forward filling
+        macro_wide = macro_wide.sort_index().ffill() # Forward fill macro data
         
         # Reset index to make 'date' a column again for merge
         macro_wide = macro_wide.reset_index()
         
-        # Merge on date
         df = pd.merge(df, macro_wide, on='date', how='left')
         
     return df

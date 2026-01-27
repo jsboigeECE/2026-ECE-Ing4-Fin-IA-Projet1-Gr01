@@ -156,6 +156,8 @@ def load_macro():
         df["date"] = pd.to_datetime(df["date"])
     return df
 
+TABLE_FUNDAMENTALS = "fundamentals_serving"
+
 def load_technicals(tickers=None):
     """
     Fetch Technical Indicators from 'technical_indicators'.
@@ -163,13 +165,44 @@ def load_technicals(tickers=None):
     params = {"select": "*"}
     if tickers:
         if isinstance(tickers, list):
-             params["symbol"] = f"in.({','.join(tickers)})"
+            params["symbol"] = f"in.({','.join(tickers)})"
         else:
-             params["symbol"] = f"eq.{tickers}"
+            params["symbol"] = f"eq.{tickers}"
              
     df = fetch_data(TABLE_TECH, params=params, cache_file="technicals.parquet")
     if df is not None and not df.empty:
         df = df.rename(columns={"symbol": "ticker"})
         df["date"] = pd.to_datetime(df["date"])
+    return df
+
+def load_fundamentals(tickers=None):
+    """
+    Fetch Fundamental Data from 'fundamentals_serving'.
+    """
+    params = {"select": "*"}
+    if tickers:
+        if isinstance(tickers, list):
+            params["symbol"] = f"in.({','.join(tickers)})"
+        else:
+            params["symbol"] = f"eq.{tickers}"
+            
+    # Fundamentals are less frequent, but we fetch all
+    df = fetch_data(TABLE_FUNDAMENTALS, params=params, cache_file="fundamentals.parquet")
+    
+    if df is not None and not df.empty:
+        df = df.rename(columns={"symbol": "ticker", "fiscal_date_ending": "date"})
+        # Some rows might use 'updated_at' if fiscal_date is missing, but fiscal is better for alignment
+        df["date"] = pd.to_datetime(df["date"])
+        
+        # Keep only relevant columns for ML
+        keep_cols = [
+            "ticker", "date", "pe_ratio_ttm", "peg_ratio_ttm", "price_to_book_ttm",
+            "ev_to_ebitda_ttm", "debt_to_equity", "roe", "roa", 
+            "operating_margin", "net_margin", "revenue_growth_yoy"
+        ]
+        # Filter columns if they exist
+        existing_cols = [c for c in keep_cols if c in df.columns]
+        df = df[existing_cols]
+        
     return df
 
