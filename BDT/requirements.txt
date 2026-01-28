@@ -10,4 +10,8 @@ python-dotenv
 yfinance
 ta
 pyarrow
-streamlit
+pyarrow
+fastapi
+uvicorn
+python-multipart
+yahooquery

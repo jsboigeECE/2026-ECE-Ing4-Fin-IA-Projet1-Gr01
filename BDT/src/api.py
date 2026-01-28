@@ -109,6 +109,11 @@ async def startup_event():
 def read_root():
     return {"status": "ok", "service": "Market Intelligence API"}
 
+@app.get("/tickers")
+def get_tickers():
+    """Return all locally available tickers."""
+    return sorted(list(AVAILABLE_TICKERS))
+
 @app.get("/search")
 def search_assets(q: str):
     """
