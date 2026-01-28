@@ -21,9 +21,11 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     """
     df = df.copy()
     
-    # Ensure return_1d exists
-    if 'return_1d' not in df.columns and 'close' in df.columns:
-        df['return_1d'] = df.groupby('ticker')['close'].pct_change()
+    # Calculate returns
+    df['return_1d'] = df.groupby('ticker')['close'].pct_change(1)
+    df['return_5d'] = df.groupby('ticker')['close'].pct_change(5)
+    df['return_20d'] = df.groupby('ticker')['close'].pct_change(20)
+    df['return_60d'] = df.groupby('ticker')['close'].pct_change(60) # Option A
     
     # 1. Volatility Measures (Rolling)
     # 20d Rolling Volatility of returns
@@ -151,21 +153,22 @@ def create_target(df: pd.DataFrame, horizon: int = 20) -> pd.DataFrame:
     """
     if df.empty:
         return df
-        
-    # Ensure sorted
-    df = df.sort_values(['ticker', 'date'])
+
+    df = df.copy()
     
-    # Calculate forward return
-    # shift(-horizon) gets the price at t+horizon
-    df['close_future'] = df.groupby('ticker')['close'].shift(-horizon)
+    # Create forward return based on horizon
+    # IMPORTANT: We need to ensure fwd_return matches the requested horizon
+    # The 'fwd_return' column might have been created with a default 20d shift in clean_data.
+    # Re-calculating here to be safe and explicit.
+    df[f'fwd_return_{horizon}d'] = df.groupby('ticker')['close'].shift(-horizon) / df['close'] - 1
     
-    df['fwd_return'] = (df['close_future'] / df['close']) - 1
-    df['target'] = (df['fwd_return'] > 0).astype(int)
+    # Create Binary Target
+    df['target'] = (df[f'fwd_return_{horizon}d'] > 0).astype(int)
     
-    # Drop rows where target cannot be calculated (unknown future)
-    valid_df = df.dropna(subset=['close_future'])
+    # Drop NaNs created by shifting
+    df = df.dropna(subset=[f'fwd_return_{horizon}d'])
     
-    return valid_df
+    return df
 
 def temporal_split(df: pd.DataFrame, train_ratio: float = 0.7, val_ratio: float = 0.15):
     """

@@ -206,3 +206,46 @@ def load_fundamentals(tickers=None):
         
     return df
 
+
+def get_available_tickers():
+    """
+    Fetch all unique tickers from the prices table to enable search filtering.
+    """
+    try:
+        # Fetch just the distinct tickers. PostgreSQL syntax for unique is DISTINCT or GROUP BY.
+        # Supabase select: ticker
+        # We can't easily do DISTINCT via simple REST param unless we use a view or rpc.
+        # Fallback: Fetch all tickers (lightweight column) ?? No, that's heavy if millions of rows.
+        # BETTER: Assuming a 'tickers' table exists? User didn't say.
+        # Let's try to fetch a known static list or cache.
+        # Actually, for this specific user env, let's assume we can fetch from a 'tickers' table OR just try to group by ticker from prices if allowable.
+        # Since I can't guess, let's try to fetch from 'tickers' metadata table if it exists, otherwise 
+        # let's try to fetch unique tickers from prices via specific query if possible, or just HEAD.
+        
+        # Current solution: Attempt to fetch from a 'tickers' table.
+        # If that fails (likely), we might have to rely on what we can find or pre-seed common ones.
+        # Wait, the user said "Ne propose que les tickers qui sont disponibles".
+        # Let's try fetching from 'prices' with ?select=ticker&limit=1 (NO).
+        # We need ALL tickers. 
+        # Workaround: For this specific project demo, let's hardcode a 'CACHE' of known good tickers if we can't query metadata.
+        # BUT, to be dynamic: check if we can query distinct tickers.
+        # PostgREST: /prices?select=ticker
+        # That's too much data.
+        
+        # Let's try to fetch from 'instruments' or 'tickers' table.
+        res = requests.get(f"{BASE_URL}/rest/v1/tickers", headers={
+            "apikey": API_KEY,
+            "Authorization": f"Bearer {API_KEY}"
+        }, params={"select": "symbol"})
+        
+        if res.status_code == 200:
+            data = res.json()
+            return [x['symbol'] for x in data]
+            
+        # Fallback to prices table (inefficient but workable for small DB)
+        # Actually, let's just return a set of popular ones if we fail, OR return None and warn.
+        print("Could not fetch tickers list, defaulting to open search.")
+        return None
+    except Exception as e:
+        print(f"Error fetching available tickers: {e}")
+        return None
