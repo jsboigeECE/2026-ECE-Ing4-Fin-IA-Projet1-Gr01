@@ -5,7 +5,7 @@ class Minesweeper:
         self.width = width
         self.height = height
         self.num_mines = num_mines
-        self.grid = set() # Set of (x,y) tuples for mines
+        self.grid = set() # Set of (x,y) tuples for mines 
         self.revealed = set() # Set of revealed cells
         self.flags = set() # Set of flagged cells
         self._generate_mines()
@@ -37,5 +37,21 @@ class Minesweeper:
         return count
     
     def reveal(self, x, y):
+        """Révèle une case. Si c'est 0, révèle récursivement les voisins."""
+        # Si déjà révélée ou flagguée, on ne fait rien
+        if (x, y) in self.revealed or (x, y) in self.flags:
+            return False
+        
+        # Ajout à la liste des révélés
         self.revealed.add((x, y))
-        return (x, y) in self.grid # Retourne True si BOOM
+        
+        # Si c'est une mine -> BOOM
+        if (x, y) in self.grid:
+            return True
+            
+        # Si la case vaut 0 (pas de mine autour), on ouvre les voisins
+        if self.get_value(x, y) == 0:
+            for nx, ny in self.get_neighbors(x, y):
+                self.reveal(nx, ny)
+                
+        return False
