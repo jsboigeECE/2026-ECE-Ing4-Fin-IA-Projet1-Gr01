@@ -2,12 +2,12 @@
 # Documentation technique – Génération de calendrier sportif
 
 ## 1. Problème traité
-Le projet traite un problème d’ordonnancement sportif : la génération d’un calendrier **round-robin aller-retour** pour un championnat.
+Le projet traite un problème d’ordonnancement sportif : la génération d’un calendrier round-robin aller-retour pour un championnat.
 
 - n équipes (nombre pair)
 - J = 2(n − 1) journées
 - Chaque équipe joue exactement un match par journée
-- Chaque paire d’équipes se rencontre exactement deux fois (domicile / extérieur)
+- Chaque paire d’équipes se rencontre exactement deux fois domicile / extérieur
 
 L’objectif est de produire un calendrier :
 - valide sportivement
@@ -17,7 +17,7 @@ L’objectif est de produire un calendrier :
 ---
 
 ## 2. Modélisation par programmation par contraintes
-Le problème est modélisé comme un **CP (Programmation par Contraintes)** avec optimisation.
+Le problème est modélisé comme un CP (Programmation par Contraintes) avec optimisation.
 
 ### 2.1 Variables de décision
 
@@ -98,7 +98,7 @@ Après résolution :
 ---
 
 ## 7. Visualisation
-Le calendrier est représenté sous forme de **diagramme de Gantt**, facilitant :
+Le calendrier est représenté sous forme de diagramme de Gantt, facilitant :
 - la lecture globale
 - l’analyse des alternances domicile / extérieur
 
