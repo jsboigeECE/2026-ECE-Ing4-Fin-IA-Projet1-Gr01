@@ -17,7 +17,7 @@ L’objectif est de produire un calendrier :
 ---
 
 ## 2. Modélisation par programmation par contraintes
-Le problème est modélisé comme un **CSP (Constraint Satisfaction Problem)** avec optimisation.
+Le problème est modélisé comme un **CP (Programmation par Contraintes)** avec optimisation.
 
 ### 2.1 Variables de décision
 
