@@ -4,8 +4,8 @@ import unicodedata
 import re
 
 # --- CONFIGURATION ---
-DOSSIER_BASE = r"C:\Users\antoi\OneDrive\Documents\ING4\S2\IA\fichier_texte"
-# Le fichier d'entrée se trouve dans le sous-dossier 'donne_reponse'
+DOSSIER_BASE = os.path.dirname(os.path.abspath(__file__))
+# Le fichier d'entrée se trouve dans le sous-dossier 'donne_reponse' (relatif à ce script)
 FICHIER_ENTREE = os.path.join(DOSSIER_BASE, "donne_reponse", "ouestfrance.txt")
 # Le fichier de sortie sera dans le même dossier
 FICHIER_SORTIE = os.path.join(DOSSIER_BASE, "donne_reponse", "dico_definitions_organise.txt")

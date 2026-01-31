@@ -12,8 +12,9 @@ except ImportError:
     cp_model = None
 
 # --- CONFIGURATION ---
-# Chemin absolu vers le dictionnaire généré par recuperation_dico.py
-PATH_DICO = r"C:\Users\antoi\OneDrive\Documents\ING4\S2\IA\fichier_texte\donne_reponse\dico_definitions_organise.txt"
+# Chemin relatif vers le dictionnaire (fonctionne sur n'importe quel PC)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PATH_DICO = os.path.join(BASE_DIR, "fichier_texte", "donne_reponse", "dico_definitions_organise.txt")
 
 # --- CLASSE DE RÉSOLUTION (IA) ---
 class CrosswordSolver:
