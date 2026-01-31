@@ -64,7 +64,7 @@ Par défaut, le script :
 
 ## Paramétrage
 
-Le nombre d’équipes peut être modifié dans la fonction `simple_demo()` :
+Le nombre d’équipes peut être modifié dans la fonction `main()` :
 ```python
 scheduler = TournamentScheduler(n_teams=4)
 ```
