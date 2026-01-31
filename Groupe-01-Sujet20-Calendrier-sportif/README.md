@@ -1,9 +1,9 @@
 # Calendrier Sportif – Sports Tournament Scheduling
 
 ## Présentation du projet
-Ce projet a pour objectif de générer automatiquement le calendrier d’un championnat sportif de type **round-robin aller-retour** (chaque équipe rencontre toutes les autres deux fois, une à domicile et une à l’extérieur), tout en respectant un ensemble de **contraintes réalistes** issues de la recherche opérationnelle.
+Ce projet a pour objectif de générer automatiquement le calendrier d’un championnat sportif de type round-robin aller-retour (chaque équipe rencontre toutes les autres deux fois, une à domicile et une à l’extérieur), tout en respectant un ensemble de contraintes réalistes issues de la recherche opérationnelle.
 
-Le problème est modélisé comme un **problème de satisfaction de contraintes (CSP)** et résolu à l’aide du solveur **CP-SAT d’OR-Tools**. L’optimisation porte principalement sur la **minimisation des "breaks"**, c’est-à-dire les enchaînements de matchs consécutifs joués au même endroit (deux domiciles ou deux déplacements d’affilée).
+Le problème est modélisé comme un problème de satisfaction de contraintes (CSP) et résolu à l’aide du solveur **CP-SAT d’OR-Tools. L’optimisation porte principalement sur la minimisation des "breaks", c’est-à-dire les enchaînements de matchs consécutifs joués au même endroit (deux domiciles ou deux déplacements d’affilée).
 
 Ce projet s’inspire directement de travaux académiques reconnus en ordonnancement sportif (Régin, Schaerf) et des compétitions internationales de sports scheduling.
 
@@ -27,9 +27,9 @@ Ce projet s’inspire directement de travaux académiques reconnus en ordonnance
 
 ## Technologies utilisées
 - **Python 3**
-- **OR-Tools (CP-SAT)** pour la résolution par contraintes
-- **Matplotlib** pour la visualisation graphique
-- **NumPy** pour la gestion de données
+- **OR-Tools CP-SAT pour la résolution par contraintes**
+- **Matplotlib pour la visualisation graphique**
+- **NumPy pour la gestion de données**
 
 ---
 
@@ -37,7 +37,7 @@ Ce projet s’inspire directement de travaux académiques reconnus en ordonnance
 
 ### Prérequis
 - Python 3.9 ou supérieur
-- Environnement virtuel recommandé (optionnel mais conseillé)
+- Environnement virtuel 
 
 ### Installation des dépendances
 ```bash
@@ -69,7 +69,7 @@ Le nombre d’équipes peut être modifié dans la fonction `simple_demo()` :
 scheduler = TournamentScheduler(n_teams=4)
 ```
 
-⚠️ Le nombre d’équipes doit être pair (une équipe fictive est ajoutée automatiquement si nécessaire).
+Le nombre d’équipes doit être pair, une équipe fictive est ajoutée automatiquement si nécessaire.
 
 ---
 
@@ -91,8 +91,4 @@ Pour différents nombres d’équipes, les solutions trouvées respectent l’en
 - Schaerf, A. (1999). *Sports scheduling: A survey*
 - ITC 2021 – Sports Scheduling Track
 
----
-
-## Auteur
-Projet réalisé dans un cadre académique pour illustrer l’utilisation de la programmation par contraintes appliquée à l’ordonnancement sportif.
 
