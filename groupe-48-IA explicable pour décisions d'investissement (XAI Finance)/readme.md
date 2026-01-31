@@ -31,7 +31,17 @@ Projet d'Intelligence Artificielle appliquée à la finance, visant à fournir d
    # Ou si un requirements.txt spécifique existe dans backend :
    # pip install -r requirements.txt
    ```
-3. Configurez les variables d'environnement (API keys, etc.) dans un fichier `.env` si nécessaire.
+3. **Configuration des Clés (CRITIQUE)** :
+   Le projet nécessite des clés API pour fonctionner (Base de données & IA).
+   
+   - Un fichier modèle `src/web/.env.example` est fourni.
+   - **Pour les correcteurs** : Créez un fichier `.env.local` dans `src/web/` et collez-y les clés fournies dans le commentaire de rendu (ou utilisez celles par défaut si fournies).
+   
+   ```bash
+   # Exemple de commande
+   cp .env.example .env.local
+   # Puis éditez le fichier avec vos clés
+   ```
 
 ### 2. Frontend (Web)
 1. Naviguez vers le dossier web :
