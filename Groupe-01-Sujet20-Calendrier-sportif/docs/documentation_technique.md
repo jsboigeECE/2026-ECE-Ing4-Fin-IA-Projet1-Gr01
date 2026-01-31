@@ -106,9 +106,7 @@ Le calendrier est représenté sous forme de **diagramme de Gantt**, facilitant 
 
 ## 8. Limites et améliorations possibles
 - Contraintes géographiques
-- Indisponibilité des stades
-- Pondération différente des breaks
-- Extension multi-divisions
+- Disponibilité des stades
 
 ---
 
