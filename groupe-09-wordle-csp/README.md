@@ -113,4 +113,7 @@ Le code est organisé autour de 3 modules logiques :
   - une erreur de saisie dans le feedback,
   - un dictionnaire incomplet / incompatible,
   - ou un historique de tentatives incohérent.
+ 
+## Slides
+https://www.canva.com/design/DAG-755-SdM/nmlLr8XF8taDIG-l5zZFVQ/edit?utm_content=DAG-755-SdM&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton
 
