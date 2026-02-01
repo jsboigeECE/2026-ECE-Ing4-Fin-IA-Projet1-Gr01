@@ -1,133 +1,198 @@
+import json
+import re
+from typing import Optional
+
 import ollama
+
 from csp_solver import solve_wordle_csp
-from collections import Counter
+
 
 # ----------------------------
-# Chargement du dictionnaire
+# Dictionary loader
 # ----------------------------
-def charger_dictionnaire(nom_fichier):
+def load_dictionary(filename: str):
     try:
-        with open(nom_fichier, 'r', encoding='utf-8') as f:
-            return [ligne.strip().upper() for ligne in f if len(ligne.strip()) == 5]
+        with open(filename, "r", encoding="utf-8") as f:
+            return [line.strip().upper() for line in f if len(line.strip()) == 5]
     except FileNotFoundError:
-        print(f"Erreur : Le fichier {nom_fichier} est introuvable.")
+        print(f"File '{filename}' not found.")
         return []
 
-DICTIONNAIRE = charger_dictionnaire("wordle.txt")
 
 # ----------------------------
-# Interface CSP
+# Normalization
 # ----------------------------
-def solveur_csp_local(lettres_vertes="", lettres_jaunes="", lettres_grises=""):
-    contraintes = []
+def _normalize_guess(s: str) -> Optional[str]:
+    if not isinstance(s, str):
+        return None
+    s = s.strip().upper()
+    if len(s) != 5:
+        return None
+    if any(not ("A" <= ch <= "Z") for ch in s):
+        return None
+    return s
 
-    if lettres_vertes:
-        for item in lettres_vertes.split(','):
-            lettre = item[0].upper()
-            pos = int(item[1])
-            contraintes.append((lettre, pos, 'green'))
 
-    if lettres_jaunes:
-        for item in lettres_jaunes.split(','):
-            lettre = item[0].upper()
-            pos = int(item[1])
-            contraintes.append((lettre, pos, 'yellow'))
+def _normalize_feedback(s: str) -> Optional[str]:
+    if not isinstance(s, str):
+        return None
+    s = s.strip().upper()
+    if len(s) != 5:
+        return None
+    if any(c not in "VJG" for c in s):
+        return None
+    return s
 
-    if lettres_grises:
-        for lettre in lettres_grises.split(','):
-            lettre = lettre.strip().upper()
-            for i in range(5):
-                contraintes.append((lettre, i, 'gray'))
 
-    return solve_wordle_csp(DICTIONNAIRE, contraintes)
+# Direct input accepted: "ORATE GVVJG" or "ORATE->GVVJG" or "ORATE -> GVVJG"
+_DIRECT = re.compile(r"^\s*([A-Za-z]{5})\s*(?:->\s*)?([VvJjGg]{5})\s*$")
+
 
 # ----------------------------
-# Agent Wordle (LLM + CSP)
+# LLM extraction (fallback)
 # ----------------------------
-def interroger_agent_wordle(prompt_utilisateur):
-
-    # LLM : extraction des contraintes
+def extract_attempt_from_text(user_text: str) -> Optional[dict]:
+    """
+    Ask the LLM to extract ONE Wordle attempt (guess + V/J/G feedback) from free text.
+    Returns {"guess": "...", "feedback": "..."} or None if extraction fails.
+    """
     response = ollama.chat(
         model="llama3.1",
-        messages=[{"role": "user", "content": prompt_utilisateur}],
+        messages=[{
+            "role": "user",
+            "content": (
+                "You are a Wordle assistant.\n"
+                "Task: extract EXACTLY ONE Wordle attempt from the user's text.\n\n"
+                "You MUST return ONLY a tool call to extract_wordle_attempt.\n"
+                "Rules:\n"
+                "- guess: a 5-letter ENGLISH word (A-Z)\n"
+                "- feedback: a 5-character string using ONLY V, J, G\n"
+                "  V=green, J=yellow, G=gray\n"
+                "- Do NOT invent data: if guess or feedback is missing/unclear, return guess=\"\" and feedback=\"\".\n\n"
+                f"USER TEXT:\n{user_text}"
+            )
+        }],
         tools=[{
             "type": "function",
             "function": {
-                "name": "solveur_csp_local",
-                "description": "Filtre les mots Wordle selon les contraintes",
+                "name": "extract_wordle_attempt",
+                "description": "Extract one Wordle attempt (guess + V/J/G feedback)",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "lettres_vertes": {
-                            "type": "string",
-                            "description": "Format LettrePosition, ex: P0,R3"
-                        },
-                        "lettres_jaunes": {
-                            "type": "string",
-                            "description": "Format LettrePosition"
-                        },
-                        "lettres_grises": {
-                            "type": "string",
-                            "description": "Format A,B,C"
-                        },
+                        "guess": {"type": "string"},
+                        "feedback": {"type": "string"}
                     },
-                    "required": ["lettres_grises"],
-                },
-            },
+                    "required": ["guess", "feedback"],
+                    "additionalProperties": False
+                }
+            }
         }],
     )
 
-    # Vérification de l'appel d'outil
-    if not response["message"].get("tool_calls"):
-        return response["message"]["content"]
+    msg = response.get("message", {}) or {}
+    tool_calls = msg.get("tool_calls") or []
+    if not tool_calls:
+        return None
 
-    tool_call = response["message"]["tool_calls"][0]
-    args = tool_call["function"]["arguments"]
+    args = tool_calls[0]["function"]["arguments"]
+    if isinstance(args, str):
+        try:
+            args = json.loads(args)
+        except json.JSONDecodeError:
+            return None
 
-    # CSP exact
-    mots_possibles = solveur_csp_local(**args)
+    if not isinstance(args, dict):
+        return None
 
-    if not mots_possibles:
-        return "Aucun mot valide ne correspond aux contraintes."
+    guess = _normalize_guess(args.get("guess", ""))
+    feedback = _normalize_feedback(args.get("feedback", ""))
 
-    # PROMPT STRICT POUR LE LLM
+    if not guess or not feedback:
+        return None
+
+    return {"guess": guess, "feedback": feedback}
+
+
+# ----------------------------
+# Full agent
+# ----------------------------
+MAX_CANDIDATES_TO_LLM = 40
+
+
+def interroger_agent_wordle(prompt_utilisateur: str, dictionary_words, attempts: list):
+    """
+    prompt_utilisateur: raw user input
+    dictionary_words: DICTIONARY (list of 5-letter words)
+    attempts: mutable list [(guess, feedback), ...] kept across turns
+    """
+
+    # 1) Direct parsing (no LLM needed)
+    m = _DIRECT.match(prompt_utilisateur or "")
+    if m:
+        guess = m.group(1).upper()
+        feedback = m.group(2).upper()
+    else:
+        # 2) LLM fallback for free-text inputs
+        extracted = extract_attempt_from_text(prompt_utilisateur)
+        if not extracted:
+            return (
+                "Could not extract a valid attempt.\n"
+                "Expected format: 'ORATE GVVJG' or 'ORATE -> GVVJG' (V=green, J=yellow, G=gray)."
+            )
+        guess = extracted["guess"]
+        feedback = extracted["feedback"]
+
+    # 3) Update history
+    attempts.append((guess, feedback))
+
+    # 4) CSP solve (attempts-based)
+    possible = solve_wordle_csp(dictionary_words, attempts)
+    if not possible:
+        return (
+            "No solution matches the current constraints.\n"
+            f"Last attempt: {guess} -> {feedback}\n"
+            f"History: {attempts}"
+        )
+
+    # 5) Limit candidates sent to the LLM
+    candidates_for_llm = possible[:]
+    if len(candidates_for_llm) > MAX_CANDIDATES_TO_LLM:
+        candidates_for_llm = sorted(candidates_for_llm, key=lambda w: len(set(w)), reverse=True)[:MAX_CANDIDATES_TO_LLM]
+
+    # 6) LLM ranking
     prompt_final = f"""
-Tu es un expert du jeu Wordle.
+You are an expert Wordle solver.
 
-Tu dois choisir UN SEUL mot exactement présent dans la liste ci-dessous.
-Il est STRICTEMENT INTERDIT de proposer un mot qui ny figure pas.
+You are given a list of valid 5-letter ENGLISH words.
+You MUST choose words ONLY from this list.
+It is strictly forbidden to invent or modify any word.
 
-Critères de choix :
-1. lettres fréquentes en français
-2. diversité des lettres
-3. mot linguistiquement courant
+List of possible words:
+{candidates_for_llm}
 
-Liste des mots possibles :
-{mots_possibles}
-
-Réponds exactement sous la forme :
-Mot choisi : <MOT>
-Justification : <2 phrases maximum>
+Return STRICTLY:
+Chosen word: <WORD>
+Priority ranking:
+1. <WORD>
+2. <WORD>
+3. <WORD>
 """
 
     final_response = ollama.chat(
         model="llama3.1",
-        messages=[{"role": "user", "content": prompt_final}]
+        messages=[{"role": "user", "content": prompt_final}],
     )
+    content = final_response["message"]["content"]
 
-    # Sécurité anti-hallucination
-    contenu = final_response["message"]["content"]
-    lignes = contenu.splitlines()
-
-    mot_choisi = None
-    for ligne in lignes:
-        if ligne.lower().startswith("mot choisi"):
-            mot_choisi = ligne.split(":")[1].strip().upper()
-
-    if mot_choisi not in mots_possibles:
-        return f" Erreur LLM : mot invalide proposé.\n{contenu}"
+    shown = ", ".join(possible[:30]) + ("..." if len(possible) > 30 else "")
+    note = ""
+    if len(possible) > MAX_CANDIDATES_TO_LLM:
+        note = f"\n(Note: CSP found {len(possible)} words; only {MAX_CANDIDATES_TO_LLM} were sent to the LLM.)\n"
 
     return (
-        f" Mots possibles : {', '.join(mots_possibles)}\n\n"
-        f" Analyse du LLM :\n{contenu}"
+        f"ADDED ATTEMPT: {guess} -> {feedback}\n"
+        f"POSSIBLE WORDS ({len(possible)}):\n{shown}\n"
+        f"{note}\n"
+        f"LLM DECISION:\n{content}"
     )

@@ -1,74 +1,83 @@
-from collections import Counter, defaultdict
+from collections import Counter
 
-def solve_wordle_csp(possible_words, constraints):
+def wordle_feedback_vjg(secret: str, guess: str) -> str:
     """
-    constraints : liste de tuples (lettre, position, feedback)
-    feedback ∈ {'green', 'yellow', 'gray'}
+    Feedback Wordle (FR) :
+      V = vert, J = jaune, G = gris
+    Règles Wordle exactes, y compris doublons.
     """
+    secret = secret.strip().upper()
+    guess = guess.strip().upper()
+    if len(secret) != 5 or len(guess) != 5:
+        raise ValueError("secret et guess doivent faire 5 lettres")
 
-    green = {}
-    forbidden_pos = defaultdict(set)
-    min_count = defaultdict(int)
-    max_count = defaultdict(lambda: 5)
+    res = ["G"] * 5
+    remaining = Counter(secret)
 
-    # --- Analyse des contraintes ---
-    for letter, pos, fb in constraints:
-        letter = letter.upper()
+    # 1) Verts
+    for i in range(5):
+        if guess[i] == secret[i]:
+            res[i] = "V"
+            remaining[guess[i]] -= 1
 
-        if fb == 'green':
-            green[pos] = letter
-            min_count[letter] += 1
+    # 2) Jaunes
+    for i in range(5):
+        if res[i] == "V":
+            continue
+        ch = guess[i]
+        if remaining[ch] > 0:
+            res[i] = "J"
+            remaining[ch] -= 1
 
-        elif fb == 'yellow':
-            forbidden_pos[pos].add(letter)
-            min_count[letter] += 1
+    return "".join(res)
 
-        elif fb == 'gray':
-            # si la lettre n'est jamais verte/jaune ailleurs
-            if min_count[letter] == 0:
-                max_count[letter] = 0
-            else:
-                # lettre grise mais déjà vue → limite max
-                max_count[letter] = min_count[letter]
 
-    # --- Filtrage du dictionnaire ---
+def solve_wordle_csp(possible_words, attempts):
+    """
+    Solver Wordle exact basé sur des tentatives (non-plat).
+
+    possible_words: iterable de mots 5 lettres (dictionnaire)
+    attempts: liste de tentatives [(guess, feedback), ...]
+      - guess: str de 5 lettres
+      - feedback: str de 5 chars parmi V/J/G (V=vert, J=jaune, G=gris)
+
+    Retour: liste des mots du dictionnaire compatibles avec toutes les tentatives.
+    """
+    # --- nettoyage / validation attempts ---
+    cleaned_attempts = []
+    for item in attempts:
+        if not isinstance(item, (list, tuple)) or len(item) != 2:
+            continue
+        guess, fb = item
+        if not isinstance(guess, str) or not isinstance(fb, str):
+            continue
+
+        guess = guess.strip().upper()
+        fb = fb.strip().upper()
+
+        if len(guess) != 5 or len(fb) != 5:
+            continue
+        if any(c not in "VJG" for c in fb):
+            continue
+        if any(not ("A" <= ch <= "Z") for ch in guess):
+            continue
+
+        cleaned_attempts.append((guess, fb))
+
+    # --- filtrage dictionnaire ---
     solutions = []
-
-    for word in possible_words:
-        word = word.upper()
-        counts = Counter(word)
-        valid = True
-
-        # lettres vertes
-        for pos, letter in green.items():
-            if word[pos] != letter:
-                valid = False
-                break
-
-        if not valid:
+    for w in possible_words:
+        w = w.strip().upper()
+        if len(w) != 5:
             continue
 
-        # jaunes : pas à cette position
-        for pos, letters in forbidden_pos.items():
-            if word[pos] in letters:
-                valid = False
+        ok = True
+        for guess, fb in cleaned_attempts:
+            if wordle_feedback_vjg(w, guess) != fb:
+                ok = False
                 break
 
-        if not valid:
-            continue
-
-        # occurrences min / max
-        for letter in min_count:
-            if counts[letter] < min_count[letter]:
-                valid = False
-                break
-
-        for letter in max_count:
-            if counts[letter] > max_count[letter]:
-                valid = False
-                break
-
-        if valid:
-            solutions.append(word)
+        if ok:
+            solutions.append(w)
 
     return solutions

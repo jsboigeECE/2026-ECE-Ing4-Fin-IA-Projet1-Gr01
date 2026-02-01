@@ -1,35 +1,48 @@
-import keyboard
 import sys
-from llm_agent import interroger_agent_wordle
+
+try:
+    import keyboard
+    KEYBOARD_AVAILABLE = True
+except Exception:
+    KEYBOARD_AVAILABLE = False
+
+from llm_agent import interroger_agent_wordle, load_dictionary
+
 
 def main():
-    print("--- Wordle Solver IA (Ollama + CSP) ---")
-    print("Pour quitter : Appuyez sur 'Echap' ET 'Entrée'\n")
+    print("--- Wordle Solver (Ollama + CSP) ---")
+    print("Input format: GUESS FEEDBACK  (V=green, J=yellow, G=gray)")
+    print("Examples: ORATE GVVJG   |   ORATE -> GVVJG")
+    print("Quit: press ESC and Enter.\n")
+
+    dictionary = load_dictionary("wordle.txt")
+    if not dictionary:
+        print("Dictionary is empty. Please check 'wordle.txt'.")
+        sys.exit(1)
+
+    attempts = []  # persistent history during the session
 
     while True:
-        # 1. Saisie utilisateur
-        prompt = input("Décrivez vos indices : ").strip()
+        user_text = input("Enter your attempt: ").strip()
 
-        # 2. Vérification de sortie (Touche Echap ou commande 'q')
-        if keyboard.is_pressed('esc'):
-            print("\nArrêt du programme... Au revoir !")
-            sys.exit()
+        if KEYBOARD_AVAILABLE and keyboard.is_pressed("esc"):
+            print("Shutting down... Goodbye!")
+            sys.exit(0)
 
-        # 3. Éviter de lancer l'IA si l'entrée est vide
-        if not prompt:
+        if not user_text:
             continue
-        
-        print("\nL'IA réfléchit...\n")
-        
+
+        print("\nThinking...\n")
+
         try:
-            reponse = interroger_agent_wordle(prompt)
-            print(reponse)
+            result = interroger_agent_wordle(user_text, dictionary, attempts)
+            print(result)
         except Exception as e:
-            print(f"Erreur lors de l'appel à l'IA : {e}")
-            
-        print("\n" + "-" * 40 + "\n")
+            print(f"Error: {e}")
+
+        print("\n" + "-" * 60 + "\n")
+
 
 if __name__ == "__main__":
     main()
-
 
