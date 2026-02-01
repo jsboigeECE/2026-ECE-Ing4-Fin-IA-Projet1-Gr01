@@ -1,19 +1,29 @@
 import pygame
 import sys
+import argparse  # <--- NOUVEAU : Pour gérer les arguments
 from game_engine import Minesweeper
 from gui import GameGUI
 from csp_solver import CSPSolver
 
 def main():
+    # --- 1. GESTION DES ARGUMENTS ---
+    parser = argparse.ArgumentParser(description="Démineur IA")
+    parser.add_argument("--width", type=int, default=15, help="Largeur de la grille")
+    parser.add_argument("--height", type=int, default=15, help="Hauteur de la grille")
+    parser.add_argument("--mines", type=int, default=30, help="Nombre de mines")
+    args = parser.parse_args()
+
+    # --- 2. INITIALISATION PYGAME ---
     pygame.init()
     AI_EVENT = pygame.USEREVENT + 1
     pygame.time.set_timer(AI_EVENT, 150) # Vitesse de l'IA
 
     def reset_game():
-        """Fonction pour (re)démarrer une partie"""
-        print("\n--- NOUVELLE PARTIE ---")
-        # Tu peux changer width/height ici si tu veux
-        g = Minesweeper(width=15, height=15, num_mines=30)
+        """Fonction pour (re)démarrer une partie avec les paramètres choisis"""
+        print(f"\n--- NOUVELLE PARTIE ({args.width}x{args.height} - {args.mines} mines) ---")
+        
+        # On utilise les arguments args.width, args.height, etc.
+        g = Minesweeper(width=args.width, height=args.height, num_mines=args.mines)
         gui = GameGUI(g)
         s = CSPSolver(g)
         return g, gui, s

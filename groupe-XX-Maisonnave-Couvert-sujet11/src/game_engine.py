@@ -8,7 +8,10 @@ class Minesweeper:
         self.grid = set()  # Set of (x,y) positions of mines
         self.revealed = set() # Set of revealed cells
         self.flags = set() # Set of flagged cells
-        self.first_click = True # <--- NOUVEAU : On retient si c'est le début
+        self.first_click = True 
+        
+        # NOUVEAU : On stocke la position de la mine qui a fait perdre le joueur
+        self.killer_move = None 
 
     def _place_mines(self, safe_x, safe_y):
         """Place les mines aléatoirement MAIS évite la première case cliquée"""
@@ -16,7 +19,6 @@ class Minesweeper:
         for x in range(self.width):
             for y in range(self.height):
                 # On ne met pas de mine sur le clic initial ni ses voisins immédiats
-                # pour garantir une ouverture ("opening") sympa
                 if abs(x - safe_x) <= 1 and abs(y - safe_y) <= 1:
                     continue
                 candidates.append((x, y))
@@ -29,14 +31,17 @@ class Minesweeper:
         if (x, y) in self.flags or (x, y) in self.revealed:
             return False
         
-        # --- NOUVEAU : Génération des mines au premier clic ---
+        # Génération des mines au premier clic
         if self.first_click:
             self._place_mines(x, y)
             self.first_click = False
 
         self.revealed.add((x, y))
 
+        # --- GESTION DE LA DÉFAITE ---
         if (x, y) in self.grid:
+            self.killer_move = (x, y)       # On mémorise la coupable
+            self.revealed.update(self.grid) # On révèle tout le reste pour voir la solution
             return True # BOOM
 
         # Si la case est vide (0 mine autour), on révèle les voisins (Flood Fill)

@@ -1,0 +1,83 @@
+import time
+import sys
+from game_engine import Minesweeper
+from csp_solver import CSPSolver
+
+# Configuration du test
+N_SIMULATIONS = 1000  # Commence par 100 pour tester, on peut augmenter à 1000  pour plus de précision. 
+WIDTH = 15
+HEIGHT = 15
+MINES = 30
+ 
+def run_benchmark():
+    print(f"🚀 Démarrage du Benchmark : {N_SIMULATIONS} parties ({WIDTH}x{HEIGHT}, {MINES} mines)")
+    print("-" * 60)
+
+    wins = 0
+    losses = 0
+    start_global = time.time()
+    
+    # Barre de chargement simple
+    for i in range(1, N_SIMULATIONS + 1):
+        # 1. Création de la partie (Sans GUI)
+        game = Minesweeper(width=WIDTH, height=HEIGHT, num_mines=MINES)
+        
+        # 2. IA en mode silencieux (verbose=False)
+        solver = CSPSolver(game, verbose=False) 
+        
+        game_over = False
+        moves_count = 0
+        
+        while not game_over:
+            # Vérification Victoire
+            if len(game.revealed) + len(game.grid) == game.width * game.height:
+                wins += 1
+                game_over = True
+                break
+            
+            # Demander à l'IA
+            safe, mines = solver.solve()
+            moves_count += 1
+            
+            # Si l'IA est bloquée (ne devrait pas arriver avec les probas, mais sécurité)
+            if not safe and not mines:
+                losses += 1 # Considéré comme défaite ou abandon
+                break
+
+            # Appliquer les drapeaux
+            for m in mines: game.flags.add(m)
+            
+            # Appliquer les révélations
+            for (x, y) in safe:
+                if (x, y) not in game.revealed:
+                    boom = game.reveal(x, y)
+                    if boom:
+                        losses += 1
+                        game_over = True
+                        break # Sort de la boucle for
+            
+            # Sécurité boucle infinie (si l'IA ne joue rien)
+            if not safe and not mines:
+                 break
+
+        # Mise à jour barre de progression
+        percent = (i / N_SIMULATIONS) * 100
+        sys.stdout.write(f"\rProgression : [{('=' * int(percent // 2)).ljust(50)}] {i}/{N_SIMULATIONS} ({percent:.1f}%)")
+        sys.stdout.flush()
+
+    total_time = time.time() - start_global
+    win_rate = (wins / N_SIMULATIONS) * 100
+    avg_time = total_time / N_SIMULATIONS
+
+    print("\n" + "-" * 60)
+    print(f"📊 RÉSULTATS DU BENCHMARK")
+    print("-" * 60)
+    print(f"✅ Victoires      : {wins}")
+    print(f"❌ Défaites       : {losses}")
+    print(f"🏆 Taux de Succès : {win_rate:.2f}%")
+    print(f"⏱️ Temps Total    : {total_time:.2f} secondes")
+    print(f"⚡ Temps Moyen/Jeu: {avg_time:.4f} secondes")
+    print("-" * 60)
+
+if __name__ == "__main__":
+    run_benchmark()

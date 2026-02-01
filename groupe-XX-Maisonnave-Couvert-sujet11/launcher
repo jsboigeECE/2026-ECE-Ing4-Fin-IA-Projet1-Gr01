@@ -1,0 +1,126 @@
+import pygame
+import sys
+import subprocess
+import os
+
+# --- CONFIGURATION ---
+WIDTH, HEIGHT = 500, 450 # Un peu plus haut pour caler les boutons
+BG_COLOR = (30, 30, 30)
+BTN_COLOR = (70, 130, 180)
+HOVER_COLOR = (100, 149, 237)
+TEXT_COLOR = (255, 255, 255)
+TITLE_COLOR = (255, 215, 0)
+
+pygame.init()
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("Démineur IA - Launcher")
+
+# --- POLICES (Correction intégrée pour Windows/Mac) ---
+# On essaie d'utiliser la police Windows qui contient les émojis ("segoeuiemoji")
+try:
+    font_title = pygame.font.SysFont("segoeuiemoji", 40, bold=True)
+    font_btn = pygame.font.SysFont("segoeuiemoji", 22) # Un peu plus petit pour rentrer
+    font_sub = pygame.font.SysFont("arial", 18, italic=True)
+except:
+    # Fallback au cas où (Mac/Linux)
+    font_title = pygame.font.SysFont("arial", 40, bold=True)
+    font_btn = pygame.font.SysFont("arial", 22)
+    font_sub = pygame.font.SysFont("arial", 18, italic=True)
+
+def draw_button(rect, text, hover=False, color_override=None):
+    base_col = color_override if color_override else BTN_COLOR
+    # Eclaircir si hover
+    draw_col = (min(base_col[0]+30, 255), min(base_col[1]+30, 255), min(base_col[2]+30, 255)) if hover else base_col
+    
+    pygame.draw.rect(screen, (20, 20, 20), (rect.x + 3, rect.y + 3, rect.width, rect.height), border_radius=10)
+    pygame.draw.rect(screen, draw_col, rect, border_radius=10)
+    
+    txt_surf = font_btn.render(text, True, TEXT_COLOR)
+    txt_rect = txt_surf.get_rect(center=rect.center)
+    screen.blit(txt_surf, txt_rect)
+
+def launch_script(script_name, args=[]):
+    """Lance un script avec des arguments optionnels"""
+    pygame.quit() 
+    base_path = os.path.dirname(os.path.abspath(__file__))
+    script_path = os.path.join(base_path, "src", script_name)
+    
+    print(f"Lancement de : {script_path} avec {args}")
+    
+    if not os.path.exists(script_path):
+        print(f"ERREUR CRITIQUE : Le fichier {script_path} est introuvable !")
+        print("Vérifiez que le dossier 'src' est bien au même niveau que 'launcher.py'.")
+        sys.exit(1)
+
+    # On construit la commande complète : [python, script, arg1, val1, arg2, val2...]
+    cmd = [sys.executable, script_path] + args
+    subprocess.run(cmd)
+    sys.exit()
+
+def main():
+    running = True
+    
+    # Boutons Difficulté
+    btn_easy = pygame.Rect(100, 130, 300, 50)
+    btn_medium = pygame.Rect(100, 200, 300, 50)
+    btn_hard = pygame.Rect(100, 270, 300, 50)
+    
+    # Bouton Benchmark
+    btn_bench = pygame.Rect(100, 360, 300, 50)
+
+    while running:
+        screen.fill(BG_COLOR)
+        mx, my = pygame.mouse.get_pos()
+
+        # Titre
+        title_surf = font_title.render("💣 Démineur IA", True, TITLE_COLOR)
+        title_rect = title_surf.get_rect(center=(WIDTH//2, 60))
+        screen.blit(title_surf, title_rect)
+
+        # Sous-titre
+        sub_surf = font_sub.render("Choisissez une difficulté :", True, (180, 180, 180))
+        screen.blit(sub_surf, (100, 105))
+
+        # Détection survol
+        h_easy = btn_easy.collidepoint((mx, my))
+        h_med = btn_medium.collidepoint((mx, my))
+        h_hard = btn_hard.collidepoint((mx, my))
+        h_bench = btn_bench.collidepoint((mx, my))
+
+        # Dessin des boutons (Codes couleurs : Vert, Bleu, Rouge, Gris)
+        draw_button(btn_easy,   "🌱 Débutant (9x9 10 mines)", h_easy, (60, 179, 113))
+        draw_button(btn_medium, "⚖️ Intermédiaire (16x16 40mi)", h_med, (70, 130, 180))
+        draw_button(btn_hard,   "🔥 Expert (30x16 99 mines)", h_hard, (220, 20, 60))
+        
+        # Séparateur visuel
+        pygame.draw.line(screen, (100,100,100), (50, 340), (450, 340), 1)
+
+        draw_button(btn_bench,  "📊 Lancer le Benchmark", h_bench, (100, 100, 100))
+
+        # Footer
+        foot_surf = pygame.font.SysFont("arial", 12).render("Projet ING4 - Maisonnave-Couvert-De Gascquet", True, (80, 80, 80))
+        screen.blit(foot_surf, (10, HEIGHT - 20))
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:
+                    # Lancement avec arguments selon le bouton
+                    if h_easy:
+                        launch_script("main.py", ["--width", "9", "--height", "9", "--mines", "10"])
+                    elif h_med:
+                        launch_script("main.py", ["--width", "16", "--height", "16", "--mines", "40"])
+                    elif h_hard:
+                        # Attention : 30 de large sur des cases de 40px = 1200px de large
+                        launch_script("main.py", ["--width", "30", "--height", "16", "--mines", "99"])
+                    elif h_bench:
+                        launch_script("benchmark.py")
+
+        pygame.display.flip()
+
+    pygame.quit()
+
+if __name__ == "__main__":
+    main()

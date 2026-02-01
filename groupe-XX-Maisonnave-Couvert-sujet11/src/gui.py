@@ -12,7 +12,7 @@ class GameGUI:
         self.screen = pygame.display.set_mode((self.width, self.height))
         pygame.display.set_caption("Démineur IA - 'R' pour relancer")
         
-        # Couleurs (Ton code original)
+        # Couleurs
         self.COLORS = {
             'bg_hidden': (200, 200, 200),
             'bg_revealed': (255, 255, 255),
@@ -26,7 +26,7 @@ class GameGUI:
         }
         
         self.font = pygame.font.SysFont('Arial', 24, bold=True)
-        # Nouvelle police pour le message de fin
+        # Police pour le message de fin
         self.overlay_font = pygame.font.SysFont('Arial', 36, bold=True)
 
     def handle_click(self, pos):
@@ -36,41 +36,84 @@ class GameGUI:
         if 0 <= x < self.game.width and 0 <= y < self.game.height:
             self.game.reveal(x, y)
 
+    def draw_cute_bomb(self, surface, x, y, cell_size):
+        """Dessine une bombe style cartoon au centre de la case (x,y)"""
+        center_x = x + cell_size // 2
+        center_y = y + cell_size // 2
+        radius = int(cell_size * 0.25)
+        
+        # 1. Le corps de la bombe (Cercle Noir)
+        pygame.draw.circle(surface, (0, 0, 0), (center_x, center_y + 2), radius)
+        
+        # 2. Le reflet (Petit ovale blanc pour l'effet 3D)
+        pygame.draw.ellipse(surface, (200, 200, 200), 
+                            (center_x - radius//2, center_y - radius//2, radius//1.5, radius//1.5))
+        
+        # 3. La mèche (Ligne orange)
+        start_fuse = (center_x, center_y - radius + 2)
+        end_fuse = (center_x + radius//1.5, center_y - radius * 1.5)
+        pygame.draw.line(surface, (255, 140, 0), start_fuse, end_fuse, 3)
+        
+        # 4. L'étincelle au bout (Petit carré jaune/rouge)
+        pygame.draw.circle(surface, (255, 0, 0), end_fuse, 2)
+
     def draw_cell(self, x, y):
-        """Dessine une case unique (Ton code original)"""
+        """Dessine une case unique"""
         rect = pygame.Rect(x * self.cell_size, y * self.cell_size, self.cell_size, self.cell_size)
         val = self.game.get_value(x, y)
         
-        if (x, y) in self.game.revealed:
+        # Récupération sécurisée du coup fatal (s'il existe)
+        killer = getattr(self.game, 'killer_move', None)
+
+        # --- CAS 1 : C'est la case FATALE (Celle cliquée par l'IA) ---
+        if (x, y) == killer:
+            # Fond ROUGE VIF pour bien voir l'erreur
+            pygame.draw.rect(self.screen, (255, 50, 50), rect)
+            self.draw_cute_bomb(self.screen, rect.x, rect.y, self.cell_size)
+
+        # --- CAS 2 : La case est RÉVÉLÉE (Normale ou fin de partie) ---
+        elif (x, y) in self.game.revealed:
             pygame.draw.rect(self.screen, self.COLORS['bg_revealed'], rect)
+            
             if (x, y) in self.game.grid:
-                pygame.draw.circle(self.screen, self.COLORS['mine'], rect.center, self.cell_size // 4)
+                # C'est une mine révélée passivement à la fin
+                # On la dessine en GRIS discret (petit point)
+                center = rect.center
+                pygame.draw.circle(self.screen, (100, 100, 100), center, self.cell_size // 5)
+            
             elif val > 0:
+                # C'est un chiffre
                 text = self.font.render(str(val), True, self.COLORS['text'].get(val, (0,0,0)))
                 self.screen.blit(text, text.get_rect(center=rect.center))
+        
+        # --- CAS 3 : La case est CACHÉE ---
         else:
             pygame.draw.rect(self.screen, self.COLORS['bg_hidden'], rect)
             if (x, y) in self.game.flags:
                 pygame.draw.rect(self.screen, self.COLORS['flag'], (rect.centerx - 5, rect.centery - 5, 10, 10))
         
+        # Bordure de la case
         pygame.draw.rect(self.screen, self.COLORS['grid'], rect, 1)
 
     def draw_probabilities(self, prob_map):
-        """Affiche un calque de couleur selon la probabilité (Ton code original)"""
+        """Affiche un calque de couleur selon la probabilité"""
         for (x, y), prob in prob_map.items():
             rect = pygame.Rect(x * self.cell_size, y * self.cell_size, self.cell_size, self.cell_size)
+            
+            # Plus la proba est haute, plus c'est rouge/jaune
             intensity = int(255 * prob) 
             s = pygame.Surface((self.cell_size, self.cell_size))
-            s.set_alpha(100)
+            s.set_alpha(100) # Transparence
             s.fill((intensity, 255 - intensity, 0))
             self.screen.blit(s, rect.topleft)
             
+            # Affichage du pourcentage si > 0
             if prob > 0.0:
                 perc_text = pygame.font.SysFont('Arial', 10).render(f"{int(prob*100)}%", True, (0,0,0))
                 self.screen.blit(perc_text, rect.topleft)
 
     def draw_restart_overlay(self, status):
-        """(NOUVEAU) Affiche un message clignotant semi-transparent"""
+        """Affiche un message clignotant semi-transparent"""
         current_time = pygame.time.get_ticks()
         
         # Clignotement toutes les 800ms
@@ -101,10 +144,10 @@ class GameGUI:
             for y in range(self.game.height):
                 self.draw_cell(x, y)
         
-        # Affichage des probabilités (Ton code original conservé)
+        # Affichage des probabilités
         if hasattr(self.game, 'prob_map') and self.game.prob_map:
             self.draw_probabilities(self.game.prob_map)
             
-        # Affichage du message de fin (Nouveau)
+        # Affichage du message de fin
         if game_status:
             self.draw_restart_overlay(game_status)
