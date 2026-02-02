@@ -1,147 +1,183 @@
-Scoring de crédit équitable par optimisation sous contraintes
+# Scoring de crédit équitable par optimisation sous contraintes
 
-1. Contexte et objectif du projet
+## 1. Contexte et objectif du projet
 
-Les systèmes de scoring de crédit sont aujourd’hui largement automatisés à l’aide de modèles de machine learning.
+Les systèmes de scoring de crédit sont aujourd'hui largement automatisés à l'aide de modèles de machine learning.
 Cependant, ces modèles peuvent reproduire ou amplifier des biais discriminatoires présents dans les données historiques, en défavorisant certains groupes (par exemple selon le sexe ou la nationalité).
 
-L’objectif de ce projet est de :
+**L'objectif de ce projet est de :**
 
-Concevoir un système d’intelligence artificielle de scoring de crédit intégrant explicitement des contraintes d’équité, afin de contrôler et quantifier le compromis entre performance prédictive et non-discrimination.
+Concevoir un système d'intelligence artificielle de scoring de crédit intégrant explicitement des contraintes d'équité, afin de contrôler et quantifier le compromis entre performance prédictive et non-discrimination.
 
 ⸻
 
-2. Problématique étudiée
+## 2. Problématique étudiée
 
 Le projet répond à la question suivante :
 
-Comment intégrer formellement des contraintes d’équité dans un modèle de scoring de crédit, tout en conservant des performances prédictives acceptables ?
+> Comment intégrer formellement des contraintes d'équité dans un modèle de scoring de crédit, tout en conservant des performances prédictives acceptables ?
 
-Pour cela, le problème est formulé comme une optimisation sous contraintes, où les métriques d’équité (Demographic Parity, Equalized Odds) sont imposées directement lors de l’apprentissage du modèle.
+Pour cela, le problème est formulé comme une optimisation sous contraintes, où les métriques d'équité (Demographic Parity, Equalized Odds) sont imposées directement lors de l'apprentissage du modèle.
 
 ⸻
 
-3. Jeu de données
+## 3. Jeu de données
 
-Le projet utilise un jeu de données clients réaliste (clients.csv) contenant :
+Le projet utilise un jeu de données clients réaliste (`clients.csv`) contenant :
 
-🔹 Variable cible
-	•	default : défaut de paiement (0 = non, 1 = oui)
+### 🔹 Variable cible
+- **default** : défaut de paiement (0 = non, 1 = oui)
 
-🔹 Attribut sensible
-	•	sex : utilisé pour mesurer et contraindre l’équité du modèle
+### 🔹 Attribut sensible
+- **sex** : utilisé pour mesurer et contraindre l'équité du modèle
 
-🔹 Variables explicatives
-	•	Données financières : income, credit_amount, loan_duration
-	•	Stabilité professionnelle : employment_years
-	•	Situation personnelle : marital_status, housing_status, dependents
-	•	Niveau d’éducation : education_level
+### 🔹 Variables explicatives
+- **Données financières** : income, credit_amount, loan_duration
+- **Stabilité professionnelle** : employment_years
+- **Situation personnelle** : marital_status, housing_status, dependents
+- **Niveau d'éducation** : education_level
 
-La colonne name est supprimée lors du pré-traitement car elle ne contient aucune information utile pour la prédiction.
+La colonne `name` est supprimée lors du pré-traitement car elle ne contient aucune information utile pour la prédiction.
 
+⸻
+
+## 4. Structure du projet
+
+```
 FCC/
 ├── src/
 │   ├── config.py           # Configuration (chemins, colonnes)
 │   ├── preprocessing.py    # Pré-traitement des données
 │   ├── models.py           # Modèles ML de base
-│   ├── fairness.py         # Contraintes d’équité (Fairlearn)
-│   ├── evaluate.py         # Métriques de performance et d’équité
+│   ├── fairness.py         # Contraintes d'équité (Fairlearn)
+│   ├── evaluate.py         # Métriques de performance et d'équité
 │   ├── explain.py          # Explicabilité (SHAP)
-│   ├── main.py             # Point d’entrée du projet
+│   ├── main.py             # Point d'entrée du projet
 │   └── plot_results.py     # Génération des graphiques
 ├── data/
 │   ├── raw/clients.csv
 │   └── processed/results.json
+├── docs/
+│   └── documentation_technique.md
+├── slides/
+│   └── Scoring de crédit équitable par optimisation sous contraintes.pdf
+├── notebooks/              # Notebooks d'analyse
 └── requirements.txt
+```
 
-5. Approche méthodologique
+⸻
 
-5.1 Modèle de base (baseline)
+## 5. Approche méthodologique
 
-Un modèle de régression logistique est entraîné sans contrainte d’équité.
+### 5.1 Modèle de base (baseline)
 
-Objectif :
-	•	Maximiser la performance prédictive (accuracy, AUC)
-	•	Servir de point de comparaison
+Un modèle de régression logistique est entraîné sans contrainte d'équité.
+
+**Objectif :**
+- Maximiser la performance prédictive (accuracy, AUC)
+- Servir de point de comparaison
 
 Ce modèle est performant, mais présente des différences de traitement entre groupes.
 
 ⸻
 
-5.2 Mesure de l’équité
+### 5.2 Mesure de l'équité
 
 Les métriques suivantes sont utilisées :
-	•	Demographic Parity Difference (DP)
-Différence de taux d’acceptation entre groupes
-	•	Equalized Odds Difference (EO)
-Différence de faux positifs et faux négatifs entre groupes
+- **Demographic Parity Difference (DP)** : Différence de taux d'acceptation entre groupes
+- **Equalized Odds Difference (EO)** : Différence de faux positifs et faux négatifs entre groupes
 
 Ces métriques permettent de quantifier objectivement la discrimination du modèle.
 
 ⸻
 
-5.3 Modèles équitables (in-processing)
+### 5.3 Modèles équitables (in-processing)
 
-L’équité est intégrée directement dans l’apprentissage grâce à la librairie Fairlearn, via l’algorithme :
-	•	Exponentiated Gradient Reduction
+L'équité est intégrée directement dans l'apprentissage grâce à la librairie **Fairlearn**, via l'algorithme :
+- **Exponentiated Gradient Reduction**
 
 Deux contraintes sont étudiées :
-	•	Demographic Parity
-	•	Equalized Odds
+- Demographic Parity
+- Equalized Odds
 
-Le paramètre epsilon contrôle le niveau de tolérance à la violation de l’équité.
-
-⸻
-
-5.4 Analyse du compromis équité / performance
-
-Le projet fait varier epsilon afin d’observer :
-	•	la réduction progressive des biais
-	•	l’impact sur la performance prédictive
-
-Cette analyse permet de montrer que l’équité est un choix de gouvernance, et non une propriété binaire.
+Le paramètre `epsilon` contrôle le niveau de tolérance à la violation de l'équité.
 
 ⸻
 
-6. Résultats principaux
+### 5.4 Analyse du compromis équité / performance
 
-Un fichier results.json est généré automatiquement et contient :
-	•	performances (accuracy, AUC)
-	•	métriques d’équité (dp_diff, eo_diff)
-	•	métriques par groupe
+Le projet fait varier `epsilon` afin d'observer :
+- la réduction progressive des biais
+- l'impact sur la performance prédictive
 
-Des graphiques sont produits :
-	•	Trade-off AUC vs epsilon
-	•	Trade-off Demographic Parity vs epsilon
-	•	Taux d’acceptation par groupe (baseline vs modèles équitables)
-
-🔍 Observation clé
-	•	Le modèle de base est le plus performant mais le plus discriminant
-	•	Les modèles équitables réduisent fortement les biais
-	•	La perte de performance reste modérée et contrôlable
+Cette analyse permet de montrer que l'équité est un choix de gouvernance, et non une propriété binaire.
 
 ⸻
-8. Installation et exécution
 
-Création de l’environnement virtuel :
-    python3 -m venv .venv
-    source .venv/bin/activate
+## 6. Résultats principaux
 
-Installation des dépendances :
-    pip install -r FCC/requirements.txt
+Un fichier [`results.json`](src/data/processed/results.json) est généré automatiquement et contient :
+- performances (accuracy, AUC)
+- métriques d'équité (dp_diff, eo_diff)
+- métriques par groupe
 
-Lancement du projet :
-    python -m FCC.src.main
+### Graphiques produits
 
-Génération des graphiques :
-    python -m FCC.src.plot_results
+**Taux d'acceptation par groupe :**
 
----
+![Taux d'acceptation par groupe](src/data/processed/selection_rate_by_group.png)
+
+**Trade-off Demographic Parity vs epsilon :**
+
+![Trade-off DP vs epsilon](src/data/processed/tradeoff_dp_vs_eps.png)
+
+### 🔍 Observation clé
+- Le modèle de base est le plus performant mais le plus discriminant
+- Les modèles équitables réduisent fortement les biais
+- La perte de performance reste modérée et contrôlable
+
+⸻
+
+## 7. Installation et exécution
+
+### Création de l'environnement virtuel :
+```bash
+python3 -m venv .venv
+source .venv/bin/activate  # Linux/Mac
+# ou
+.venv\Scripts\activate     # Windows
+```
+
+### Installation des dépendances :
+```bash
+pip install -r FCC/requirements.txt
+```
+
+### Lancement du projet :
+```bash
+python -m FCC.src.main
+```
+
+### Génération des graphiques :
+```bash
+python -m FCC.src.plot_results
+```
+
+⸻
+
+## 8. Tests
+
+Pour exécuter les tests unitaires :
+```bash
+pytest FCC/src/tests/
+```
+
+⸻
 
 ## 👥 Équipe
-- **Hugo**
-- **Jeremy**
-- **Mael**
+- **Hugo CHRISMANT**
+- **Jeremy CLEMENT**
+- **Mael FAYE**
 
 Projet réalisé dans le cadre du cours *Intelligence Artificielle – Finance*
-(ECE Paris, Ingénieur 4ᵉ année).
+(ECE Paris, Ingénieur 4ᵉ année)
