@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Wordle Solver – CSP + Entropie</title>
+  <style>
+    :root{
+      --bg:#0b0b0b; --surface:#151515; --border:#2a2a2a;
+      --text:#eaeaea; --muted:#8b8b8b;
+      --green:#00ff88; --yellow:#ffb020; --gray:#3a3a3a;
+      --accent:#ffffff; --danger:#ff4d4d;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      background: var(--bg); color: var(--text);
+      min-height:100vh; padding:24px;
+      display:flex; justify-content:center;
+    }
+    .wrap{width: min(920px, 100%);}
+    header{
+      border-bottom:1px solid var(--border);
+      padding-bottom:18px; margin-bottom:18px;
+    }
+    h1{letter-spacing:0.08em;font-weight:700;text-transform:uppercase;font-size:32px}
+    .sub{color:var(--muted); margin-top:8px; display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap}
+    .grid{
+      display:grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap:18px;
+    }
+    @media (max-width: 900px){
+      .grid{grid-template-columns: 1fr}
+    }
+
+    .card{
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding:18px;
+    }
+    .label{
+      color:var(--muted); text-transform:uppercase;
+      letter-spacing:0.12em; font-size:12px;
+      margin-bottom:8px;
+    }
+    .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+    input[type="text"]{
+      width:100%;
+      background: #0f0f0f;
+      border:1px solid var(--border);
+      color:var(--text);
+      padding:12px 12px;
+      font-size:16px;
+      outline:none;
+      text-transform:uppercase;
+    }
+    input[type="text"]:focus{
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent);
+    }
+    .btn{
+      border:1px solid var(--border);
+      background: var(--accent);
+      color: var(--bg);
+      padding:12px 14px;
+      font-size:14px;
+      text-transform:uppercase;
+      letter-spacing:0.12em;
+      cursor:pointer;
+      min-width: 190px;
+    }
+    .btn.secondary{
+      background: transparent;
+      color: var(--text);
+    }
+    .btn:disabled{
+      opacity:0.35;
+      cursor:not-allowed;
+    }
+
+    .board{
+      display:flex; flex-direction:column; gap:10px;
+      margin-top:10px;
+    }
+    .letter-row{
+      display:grid;
+      grid-template-columns: repeat(5, 52px);
+      gap:10px;
+    }
+    .cell{
+      width:52px; height:52px;
+      border:1px solid var(--border);
+      display:flex; align-items:center; justify-content:center;
+      font-size:22px; font-weight:800;
+      background:#0f0f0f;
+      user-select:none;
+    }
+    .cell.g{background: var(--green); color:var(--bg); border-color: var(--green)}
+    .cell.y{background: var(--yellow); color:var(--bg); border-color: var(--yellow)}
+    .cell.b{background: var(--gray); color: #c0c0c0; border-color: var(--gray)}
+
+    .msg{
+      margin-top:12px;
+      padding:10px 12px;
+      border-left: 3px solid var(--accent);
+      background: #101010;
+      color: var(--muted);
+      font-size:14px;
+    }
+    .msg.ok{border-color: var(--green); color: var(--green)}
+    .msg.err{border-color: var(--danger); color: var(--danger)}
+    .chips{margin-top:10px}
+    .chip{
+      display:inline-block;
+      padding:4px 10px;
+      border:1px solid var(--border);
+      background:#0f0f0f;
+      margin:4px 6px 0 0;
+      font-size:12px;
+      letter-spacing:0.08em;
+      text-transform:uppercase;
+      color:var(--text);
+    }
+    .muted{color:var(--muted); font-size:13px; margin-top:8px; line-height:1.35}
+    .kpi{display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border)}
+    .kpi:last-child{border-bottom:none}
+    .kpi span:first-child{color:var(--muted)}
+    .mono{font-variant-numeric: tabular-nums; font-weight:700}
+    .file{
+      display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+    }
+    input[type="file"]{
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Wordle Solver</h1>
+    <div class="sub">
+      <span>CSP via feedback exact + suggestion (entropie)</span>
+      <span class="mono" id="turnTop">Tour: 1</span>
+    </div>
+  </header>
+
+  <div class="grid">
+    <!-- LEFT -->
+    <section class="card">
+      <div class="label">Dictionnaire</div>
+      <div class="file">
+        <input type="file" id="fileWords" accept=".txt"/>
+      </div>
+
+      <div class="board" id="board"></div>
+
+      <div style="margin-top:16px">
+        <div class="label">Mot proposé</div>
+        <input type="text" id="currentWord" readonly value="SLATE"/>
+      </div>
+
+      <div style="margin-top:12px">
+        <div class="label">Feedback (G/Y/B)</div>
+        <input type="text" id="feedback" maxlength="5" placeholder="ex: BYGBB"/>
+        <div class="muted">G = vert, Y = jaune, B = gris</div>
+      </div>
+
+      <div class="row" style="margin-top:14px">
+        <button class="btn" id="btnSubmit" disabled>Submit Feedback</button>
+        <button class="btn secondary" id="btnReset">Reset Game</button>
+      </div>
+
+      <div id="msg" class="msg">Charge un dictionnaire pour commencer.</div>
+    </section>
+
+    <!-- RIGHT -->
+    <aside class="card">
+      <div class="label">Stats</div>
+      <div class="kpi"><span>Mots chargés</span><span class="mono" id="kAll">0</span></div>
+      <div class="kpi"><span>Solutions restantes</span><span class="mono" id="kPoss">0</span></div>
+      <div class="kpi"><span>Tour</span><span class="mono" id="kTurn">1</span></div>
+
+      <div style="margin-top:14px" class="label">Solutions (aperçu)</div>
+      <div id="chips" class="chips"></div>
+
+      <div class="muted" style="margin-top:14px">
+        ⚠️ Si tu mets un feedback faux (ou pas celui de Wordle), tu peux tomber sur “0 solution”.
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+/* =========================
+   Core Wordle exact feedback
+   ========================= */
+
+function buildFeedback(secret, guess){
+  secret = secret.toUpperCase();
+  guess  = guess.toUpperCase();
+
+  const fb = Array(5).fill('B');
+  const count = {};
+
+  for (const ch of secret) count[ch] = (count[ch] || 0) + 1;
+
+  // greens
+  for (let i=0;i<5;i++){
+    if (guess[i] === secret[i]){
+      fb[i] = 'G';
+      count[guess[i]]--;
+    }
+  }
+  // yellows
+  for (let i=0;i<5;i++){
+    if (fb[i] === 'B'){
+      const ch = guess[i];
+      if ((count[ch] || 0) > 0){
+        fb[i] = 'Y';
+        count[ch]--;
+      }
+    }
+  }
+  return fb.join('');
+}
+
+function filterPossible(possibleWords, guess, feedback){
+  const out = [];
+  for (const w of possibleWords){
+    if (buildFeedback(w, guess) === feedback) out.push(w);
+  }
+  return out;
+}
+
+/* =========================
+   Entropy (optionnel)
+   ========================= */
+
+function log2(x){ return Math.log(x)/Math.log(2); }
+
+function entropyOfGuess(guess, possibleWords){
+  const counts = new Map();
+  const n = possibleWords.length;
+  for (const secret of possibleWords){
+    const fb = buildFeedback(secret, guess);
+    counts.set(fb, (counts.get(fb) || 0) + 1);
+  }
+  let H = 0;
+  for (const k of counts.values()){
+    const p = k / n;
+    H -= p * log2(p);
+  }
+  return H;
+}
+
+// Pour ne pas exploser en temps, on limite les candidats testés
+function bestGuessEntropy(possibleWords){
+  // Heuristique:
+  // - si beaucoup de possibilités, on teste un échantillon (max 400)
+  // - sinon, on teste tout
+  const n = possibleWords.length;
+  const candidates = (n > 400) ? sampleArray(possibleWords, 400) : possibleWords;
+
+  let bestWord = candidates[0];
+  let bestScore = -1;
+
+  for (const g of candidates){
+    const score = entropyOfGuess(g, possibleWords);
+    if (score > bestScore){
+      bestScore = score;
+      bestWord = g;
+    }
+  }
+  return {word: bestWord, score: bestScore};
+}
+
+function sampleArray(arr, k){
+  const out = [];
+  const n = arr.length;
+  const used = new Set();
+  while (out.length < k && out.length < n){
+    const i = Math.floor(Math.random()*n);
+    if (!used.has(i)){
+      used.add(i);
+      out.push(arr[i]);
+    }
+  }
+  return out;
+}
+
+/* =========================
+   UI + Game state
+   ========================= */
+
+let ALL = [];
+let possible = [];
+let turn = 1;
+let history = [];
+let current = "SLATE";
+
+const elBoard = document.getElementById("board");
+const elMsg   = document.getElementById("msg");
+const elChips = document.getElementById("chips");
+
+const kAll   = document.getElementById("kAll");
+const kPoss  = document.getElementById("kPoss");
+const kTurn  = document.getElementById("kTurn");
+const turnTop = document.getElementById("turnTop");
+
+const btnSubmit = document.getElementById("btnSubmit");
+const btnReset  = document.getElementById("btnReset");
+
+const inpFeedback = document.getElementById("feedback");
+const inpCurrent  = document.getElementById("currentWord");
+
+function setMsg(text, kind="info"){
+  elMsg.className = "msg";
+  if (kind==="ok") elMsg.classList.add("ok");
+  if (kind==="err") elMsg.classList.add("err");
+  elMsg.textContent = text;
+}
+
+function renderBoard(){
+  elBoard.innerHTML = "";
+  for (const h of history){
+    const row = document.createElement("div");
+    row.className = "letter-row";
+    for (let i=0;i<5;i++){
+      const c = document.createElement("div");
+      c.className = "cell";
+      c.textContent = h.word[i] || "";
+      const f = h.feedback[i];
+      if (f==="G") c.classList.add("g");
+      else if (f==="Y") c.classList.add("y");
+      else c.classList.add("b");
+      row.appendChild(c);
+    }
+    elBoard.appendChild(row);
+  }
+
+  // ligne courante
+  const row = document.createElement("div");
+  row.className = "letter-row";
+  for (let i=0;i<5;i++){
+    const c = document.createElement("div");
+    c.className = "cell";
+    c.textContent = current[i] || "";
+    row.appendChild(c);
+  }
+  elBoard.appendChild(row);
+}
+
+function renderStats(){
+  kAll.textContent = ALL.length;
+  kPoss.textContent = possible.length;
+  kTurn.textContent = turn;
+  turnTop.textContent = "Tour: " + turn;
+}
+
+function renderChips(){
+  elChips.innerHTML = "";
+  const sample = possible.slice(0, 12);
+  for (const w of sample){
+    const s = document.createElement("span");
+    s.className = "chip";
+    s.textContent = w;
+    elChips.appendChild(s);
+  }
+  if (possible.length > sample.length){
+    const s = document.createElement("span");
+    s.className = "chip";
+    s.style.opacity = "0.6";
+    s.textContent = "+" + (possible.length - sample.length);
+    elChips.appendChild(s);
+  }
+}
+
+function resetGame(){
+  turn = 1;
+  history = [];
+  current = "SLATE";
+  inpCurrent.value = current;
+  inpFeedback.value = "";
+  possible = [...ALL];
+
+  btnSubmit.disabled = (ALL.length === 0);
+
+  renderBoard();
+  renderStats();
+  renderChips();
+
+  if (ALL.length === 0) setMsg("Charge un dictionnaire pour commencer.", "info");
+  else setMsg("Prêt. Entre le feedback de Wordle pour SLATE.", "ok");
+}
+
+function nextSuggestion(){
+  if (possible.length === 0){
+    setMsg("Incohérence : 0 solution. Vérifie ton feedback.", "err");
+    btnSubmit.disabled = true;
+    return;
+  }
+  if (possible.length === 1){
+    current = possible[0];
+    inpCurrent.value = current;
+    setMsg("Mot trouvé : " + current, "ok");
+    btnSubmit.disabled = true;
+    renderBoard();
+    renderStats();
+    renderChips();
+    return;
+  }
+
+  // Suggestion:
+  // - Tour 1 : SLATE (fixe)
+  // - Ensuite : entropie (sur échantillon si trop gros)
+  if (turn === 1){
+    current = "SLATE";
+    inpCurrent.value = current;
+    setMsg("Tour 1 : joue SLATE et entre le feedback.", "ok");
+  } else {
+    const {word, score} = bestGuessEntropy(possible);
+    current = word;
+    inpCurrent.value = current;
+    setMsg(`Suggestion: ${current} (entropie≈${score.toFixed(3)})`, "info");
+  }
+
+  renderBoard();
+  renderStats();
+  renderChips();
+}
+
+btnReset.addEventListener("click", () => {
+  resetGame();
+  setMsg("Reset effectué.", "info");
+});
+
+btnSubmit.addEventListener("click", () => {
+  const fb = inpFeedback.value.trim().toUpperCase();
+
+  if (!/^[GYB]{5}$/.test(fb)){
+    setMsg("Feedback invalide. Exemple: BYGBB", "err");
+    return;
+  }
+
+  history.push({word: current, feedback: fb});
+
+  if (fb === "GGGGG"){
+    setMsg(`Bravo ! Mot trouvé en ${turn} tours : ${current}`, "ok");
+    btnSubmit.disabled = true;
+    renderBoard();
+    return;
+  }
+
+  possible = filterPossible(possible, current, fb);
+
+  turn += 1;
+  inpFeedback.value = "";
+
+  // Si incohérence on bloque, sinon on propose
+  if (possible.length === 0){
+    renderBoard(); renderStats(); renderChips();
+    setMsg("Incohérence : 0 solution. Vérifie ton feedback.", "err");
+    btnSubmit.disabled = true;
+    return;
+  }
+
+  // continue
+  btnSubmit.disabled = false;
+  nextSuggestion();
+});
+
+// Enter pour submit
+inpFeedback.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !btnSubmit.disabled){
+    btnSubmit.click();
+  }
+});
+
+/* =========================
+   Loading words.txt locally
+   ========================= */
+
+document.getElementById("fileWords").addEventListener("change", (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    const text = String(reader.result || "");
+    ALL = text.split(/\r?\n/)
+      .map(w => w.trim().toUpperCase())
+      .filter(w => w.length === 5 && /^[A-Z]{5}$/.test(w));
+
+    // dédoublonner
+    ALL = Array.from(new Set(ALL));
+
+    resetGame();
+    btnSubmit.disabled = false;
+    nextSuggestion();
+    setMsg(`Dictionnaire chargé : ${ALL.length} mots.`, "ok");
+  };
+  reader.onerror = () => {
+    setMsg("Erreur lecture du fichier words.txt", "err");
+  };
+  reader.readAsText(file, "utf-8");
+});
+
+// init
+resetGame();
+renderBoard();
+</script>
+</body>
+</html>
